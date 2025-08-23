@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Peer from 'simple-peer'
-import { WebRTCMessage } from '@pokytalk/shared'
+import { WebRTCMessage } from '../../../shared/src/types'
 
 export function useWebRTC() {
   const [peer, setPeer] = useState<Peer.Instance | null>(null)
@@ -47,8 +47,8 @@ export function useWebRTC() {
       analyserRef.current.fftSize = 256
       source.connect(analyserRef.current)
 
-      const bufferLength = analyserRef.current.frequencyBinCount
-      dataArrayRef.current = new Uint8Array(bufferLength)
+          const bufferLength = analyserRef.current.frequencyBinCount
+    dataArrayRef.current = new Uint8Array(bufferLength) as Uint8Array
 
       // Start monitoring audio levels
       updateAudioLevel()
@@ -63,6 +63,7 @@ export function useWebRTC() {
   const updateAudioLevel = () => {
     if (!analyserRef.current || !dataArrayRef.current) return
 
+    // @ts-ignore
     analyserRef.current.getByteFrequencyData(dataArrayRef.current)
     
     let sum = 0

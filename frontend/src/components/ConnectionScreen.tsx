@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Phone, Users, Globe, Calendar } from 'lucide-react'
-import { ServerStats, UserFilters } from '@pokytalk/shared'
+import { ServerStats, UserFilters } from '../../../shared/src/types'
 import { generateYears, getCountryName } from '@/lib/utils'
 
 interface ConnectionScreenProps {

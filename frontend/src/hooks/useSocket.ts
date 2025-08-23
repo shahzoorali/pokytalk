@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
-import { User, UserFilters, WebRTCMessage, ChatMessage, ServerStats } from '@pokytalk/shared'
+import { User, UserFilters, WebRTCMessage, ChatMessage, ServerStats } from '../../../shared/src/types'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'
 

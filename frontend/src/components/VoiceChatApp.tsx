@@ -6,7 +6,7 @@ import { useWebRTC } from '@/hooks/useWebRTC'
 import { ConnectionScreen } from './ConnectionScreen'
 import { CallScreen } from './CallScreen'
 import { LoadingScreen } from './LoadingScreen'
-import { UserFilters } from '@pokytalk/shared'
+import { UserFilters } from '../../../shared/src/types'
 
 export function VoiceChatApp() {
   const [isInitialized, setIsInitialized] = useState(false)
@@ -65,30 +65,30 @@ export function VoiceChatApp() {
 
   // Handle call matching
   useEffect(() => {
-    if (partner && sessionId && localStream) {
-      const isInitiator = user?.id < partner.id
+    if (partner && sessionId && localStream && user?.id) {
+      const isInitiator = user.id < partner.id
       const newPeer = createPeer(isInitiator, localStream)
       
-      newPeer.on('signal', (data) => {
-        if (data.type === 'offer') {
+      newPeer.on('signal', (data: any) => {
+        if (data.type === 'offer' && data.sdp) {
           sendWebRTCMessage({
             type: 'offer',
             sdp: data.sdp,
-            from: user!.id,
+            from: user.id,
             to: partner.id,
           })
-        } else if (data.type === 'answer') {
+        } else if (data.type === 'answer' && data.sdp) {
           sendWebRTCMessage({
             type: 'answer',
             sdp: data.sdp,
-            from: user!.id,
+            from: user.id,
             to: partner.id,
           })
         } else if (data.candidate) {
           sendWebRTCMessage({
             type: 'ice-candidate',
             candidate: data.candidate,
-            from: user!.id,
+            from: user.id,
             to: partner.id,
           })
         }
