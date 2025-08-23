@@ -18,9 +18,3 @@ run:
       value: production
     - name: PORT
       value: 3001
-  health-check:
-    path: /health
-    interval: 30
-    timeout: 5
-    healthy-threshold: 2
-    unhealthy-threshold: 3
