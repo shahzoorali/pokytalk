@@ -8,6 +8,24 @@
 
 ### Step 1: Deploy Backend to AWS App Runner
 
+**Option A: Using apprunner.yaml (Recommended)**
+
+1. **Go to AWS App Runner Console**
+   - Navigate to AWS App Runner
+   - Click "Create service"
+
+2. **Source Configuration**
+   - Choose "Source code repository"
+   - Connect your GitHub repository: `shahzoorali/pokytalk`
+   - Branch: `main`
+   - Root directory: `backend`
+
+3. **Build Configuration**
+   - Choose "Use a configuration file"
+   - App Runner will automatically detect `apprunner.yaml`
+
+**Option B: Manual Configuration**
+
 1. **Go to AWS App Runner Console**
    - Navigate to AWS App Runner
    - Click "Create service"
@@ -36,6 +54,15 @@
 5. **Create Service**
    - Review and create
    - Note the service URL (e.g., `https://abc123.us-east-1.awsapprunner.com`)
+
+### Benefits of Using apprunner.yaml
+
+✅ **Version Control**: Configuration is tracked in Git  
+✅ **Consistency**: Same configuration across environments  
+✅ **Health Checks**: Automatic health monitoring  
+✅ **Environment Variables**: Pre-configured production settings  
+✅ **Easy Updates**: Just push changes to Git  
+✅ **Reproducible**: Exact same deployment every time
 
 ### Step 2: Update Frontend Environment Variables
 
