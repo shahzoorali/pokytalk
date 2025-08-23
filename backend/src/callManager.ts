@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { CallSession, ChatMessage, User } from '../../shared/src/types';
+import { CallSession, ChatMessage, User } from '@pokytalk/shared';
 
 export class CallManager {
   private sessions: Map<string, CallSession> = new Map();

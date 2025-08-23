@@ -6,7 +6,7 @@ import { useWebRTC } from '@/hooks/useWebRTC'
 import { ConnectionScreen } from './ConnectionScreen'
 import { CallScreen } from './CallScreen'
 import { LoadingScreen } from './LoadingScreen'
-import { UserFilters } from '../../../shared/src/types'
+import { UserFilters } from '@pokytalk/shared'
 
 export function VoiceChatApp() {
   const [isInitialized, setIsInitialized] = useState(false)

@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
-import { User, UserFilters } from '../../shared/src/types';
+import { User, UserFilters } from '@pokytalk/shared';
 
 export class UserManager {
   private users: Map<string, User> = new Map();

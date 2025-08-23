@@ -2,7 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { UserManager } from './userManager';
 import { CallManager } from './callManager';
 import { StatsManager } from './statsManager';
-import { User, UserFilters, WebRTCMessage, ChatMessage } from '../../shared/src/types';
+import { User, UserFilters, WebRTCMessage, ChatMessage } from '@pokytalk/shared';
 
 export class SocketManager {
   constructor(

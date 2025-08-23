@@ -1,4 +1,4 @@
-import { ServerStats } from '../../shared/src/types';
+import { ServerStats } from '@pokytalk/shared';
 
 export class StatsManager {
   private stats: ServerStats = {
