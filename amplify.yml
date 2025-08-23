@@ -1,0 +1,35 @@
+version: 1
+backend:
+  phases:
+    preBuild:
+      commands:
+        - echo "Installing dependencies..."
+        - npm install
+    build:
+      commands:
+        - echo "Building shared package..."
+        - cd shared && npm install && npm run build && cd ..
+        - echo "Building backend..."
+        - cd backend && npm install && npm run build && cd ..
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - echo "Installing frontend dependencies..."
+        - cd frontend && npm install
+        - echo "Setting up environment variables..."
+        - echo "NEXT_PUBLIC_BACKEND_URL=$BACKEND_URL" >> .env.local
+    build:
+      commands:
+        - echo "Building frontend..."
+        - npm run build
+  artifacts:
+    baseDirectory: frontend/.next
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - frontend/node_modules/**/*
+      - backend/node_modules/**/*
+      - shared/node_modules/**/*
+      - node_modules/**/*
