@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import type { KeyboardEvent } from 'react'
 import { Phone, Mic, MicOff, MessageSquare, X, Send } from 'lucide-react'
 import { User, ChatMessage } from '@pokytalk/shared'
 import { formatTime } from '@/lib/utils'
@@ -45,7 +44,6 @@ export function CallScreen({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Attach remote stream to audio element
   useEffect(() => {
     if (remoteAudioRef.current && remoteStream) {
       try {
@@ -64,7 +62,7 @@ export function CallScreen({
     }
   }
 
-  const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSendMessage()
@@ -73,12 +71,8 @@ export function CallScreen({
 
   return (
     <div className="min-h-screen bg-gray-900 flex">
-      {/* Hidden remote audio element for playback */}
       <audio ref={remoteAudioRef} autoPlay playsInline />
-
-      {/* Main Call Area */}
       <div className={`flex-1 flex flex-col ${showChat ? 'hidden md:flex' : 'flex'}`}>
-        {/* Header */}
         <div className="bg-gray-800 p-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className={`w-3 h-3 ${isWebRTCConnected ? 'bg-green-500' : 'bg-yellow-500'} rounded-full animate-pulse`}></div>
@@ -91,9 +85,7 @@ export function CallScreen({
           </div>
         </div>
 
-        {/* Call Content */}
         <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8">
-          {/* Partner Info */}
           <div className="text-center space-y-4">
             <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto">
               <Phone className="w-12 h-12 text-gray-400" />
@@ -104,9 +96,7 @@ export function CallScreen({
             </div>
           </div>
 
-          {/* Audio Level Indicators */}
           <div className="w-full max-w-md space-y-6">
-            {/* Local Audio Level */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">You</span>
@@ -120,7 +110,6 @@ export function CallScreen({
               <AudioLevelBar level={isMuted ? 0 : localAudioLevel} />
             </div>
 
-            {/* Remote Audio Level */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">Partner</span>
@@ -132,7 +121,6 @@ export function CallScreen({
             </div>
           </div>
 
-          {/* Call Controls */}
           <div className="flex items-center space-x-4">
             <button
               onClick={onToggleMute}
@@ -162,50 +150,35 @@ export function CallScreen({
         </div>
       </div>
 
-      {/* Chat Sidebar */}
       {showChat && (
-        <div className="w-full md:w-80 bg-gray-800 flex flex-col">
-          {/* Chat Header */}
-          <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-            <h3 className="text-white font-medium">Text Chat</h3>
-            <button
-              onClick={onToggleChat}
-              className="text-gray-400 hover:text-white md:hidden"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col md:hidden">
+          <div className="p-4 border-b border-gray-700">
+            <h3 className="text-white font-medium">Chat</h3>
           </div>
-
-          {/* Messages */}
+          
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {messages.length === 0 ? (
-              <div className="text-center text-gray-500 text-sm">
-                No messages yet. Start the conversation!
-              </div>
-            ) : (
-              messages.map((message) => (
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className={`flex ${message.senderId === partner.id ? 'justify-start' : 'justify-end'}`}
+              >
                 <div
-                  key={message.id}
-                  className={`flex ${message.senderId === 'me' ? 'justify-end' : 'justify-start'}`}
+                  className={`max-w-xs px-3 py-2 rounded-lg ${
+                    message.senderId === partner.id
+                      ? 'bg-gray-700 text-white'
+                      : 'bg-blue-600 text-white'
+                  }`}
                 >
-                  <div
-                    className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
-                      message.senderId === 'me'
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-gray-700 text-gray-200'
-                    }`}
-                  >
-                    <p className="break-words">{message.content}</p>
-                    <p className="text-xs opacity-70 mt-1">
-                      {formatTime(message.timestamp)}
-                    </p>
-                  </div>
+                  <p className="text-sm">{message.content}</p>
+                  <p className="text-xs opacity-70 mt-1">
+                    {new Date(message.timestamp).toLocaleTimeString()}
+                  </p>
                 </div>
-              ))}
+              </div>
+            ))}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Message Input */}
           <div className="p-4 border-t border-gray-700">
             <div className="flex space-x-2">
               <textarea
@@ -213,33 +186,72 @@ export function CallScreen({
                 onChange={(e) => setMessageInput(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Type a message..."
-                maxLength={3000}
-                className="flex-1 input-field resize-none h-12 py-2"
+                className="flex-1 bg-gray-700 text-white rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                 rows={1}
+                maxLength={3000}
               />
               <button
                 onClick={handleSendMessage}
                 disabled={!messageInput.trim()}
-                className="btn-primary px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white p-2 rounded-lg transition-colors"
               >
                 <Send className="w-4 h-4" />
               </button>
-            </div>
-            <div className="text-xs text-gray-500 mt-1 text-right">
-              {messageInput.length}/3000
             </div>
           </div>
         </div>
       )}
 
-      {/* Chat Toggle Button (Desktop) */}
-      {!showChat && (
-        <button
-          onClick={onToggleChat}
-          className="fixed bottom-6 right-6 p-4 rounded-full bg-primary-600 hover:bg-primary-700 text-white shadow-lg hidden md:flex"
-        >
-          <MessageSquare className="w-6 h-6" />
-        </button>
+      {showChat && (
+        <div className="hidden md:block w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
+          <div className="p-4 border-b border-gray-700">
+            <h3 className="text-white font-medium">Chat</h3>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className={`flex ${message.senderId === partner.id ? 'justify-start' : 'justify-end'}`}
+              >
+                <div
+                  className={`max-w-xs px-3 py-2 rounded-lg ${
+                    message.senderId === partner.id
+                      ? 'bg-gray-700 text-white'
+                      : 'bg-blue-600 text-white'
+                  }`}
+                >
+                  <p className="text-sm">{message.content}</p>
+                  <p className="text-xs opacity-70 mt-1">
+                    {new Date(message.timestamp).toLocaleTimeString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+
+          <div className="p-4 border-t border-gray-700">
+            <div className="flex space-x-2">
+              <textarea
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Type a message..."
+                className="flex-1 bg-gray-700 text-white rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={1}
+                maxLength={3000}
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!messageInput.trim()}
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white p-2 rounded-lg transition-colors"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
