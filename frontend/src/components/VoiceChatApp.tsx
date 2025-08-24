@@ -113,11 +113,9 @@ export function VoiceChatApp() {
       peerSessionRef.current = sessionId
       newPeer.on('signal', (data: any) => {
         if (isUnmountingRef.current) return
-        console.log('📡 WebRTC signal generated:', data.type || 'ice-candidate')
-        if (data.type === 'offer' && data.sdp) {
-          sendWebRTCMessage({ type: 'offer', sdp: data.sdp, from: uid, to: pid })
-        } else if (data.type === 'answer' && data.sdp) {
-          sendWebRTCMessage({ type: 'answer', sdp: data.sdp, from: uid, to: pid })
+        console.log('📡 WebRTC signal generated:', data.type || 'candidate')
+        if (data.type === 'offer' || data.type === 'answer') {
+          sendWebRTCMessage({ type: data.type, sdp: data, from: uid, to: pid })
         } else if (data.candidate) {
           sendWebRTCMessage({ type: 'ice-candidate', candidate: data.candidate, from: uid, to: pid })
         }

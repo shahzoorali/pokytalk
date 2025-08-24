@@ -43,21 +43,21 @@ export interface ServerStats {
 
 export interface WebRTCOffer {
   type: 'offer';
-  sdp: string;
+  sdp: any; // carry full simple-peer signal object
   from: string;
   to: string;
 }
 
 export interface WebRTCAnswer {
   type: 'answer';
-  sdp: string;
+  sdp: any; // carry full simple-peer signal object
   from: string;
   to: string;
 }
 
 export interface WebRTCIceCandidate {
   type: 'ice-candidate';
-  candidate: any; // RTCIceCandidateInit type
+  candidate: any; // full ICE candidate object
   from: string;
   to: string;
 }
