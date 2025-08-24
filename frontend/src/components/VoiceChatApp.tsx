@@ -13,6 +13,7 @@ export function VoiceChatApp() {
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState<UserFilters>({})
   const isUnmountingRef = useRef(false)
+  const callInProgressRef = useRef(false)
   
   const {
     socket,
@@ -48,10 +49,10 @@ export function VoiceChatApp() {
     cleanup: cleanupWebRTC,
   } = useWebRTC()
 
-  // Cleanup on unmount
+  // Cleanup on unmount - only if not in a call
   useEffect(() => {
     return () => {
-      if (!isUnmountingRef.current) {
+      if (!isUnmountingRef.current && !callInProgressRef.current) {
         console.log('VoiceChatApp unmounting, cleaning up...')
         isUnmountingRef.current = true
         cleanupWebRTC()
@@ -69,6 +70,7 @@ export function VoiceChatApp() {
   // Handle WebRTC signaling - use useCallback to prevent recreation
   const handleWebRTCMessageCallback = useCallback((message: any) => {
     if (!isUnmountingRef.current) {
+      console.log('📨 Received WebRTC message:', message.type)
       handleWebRTCMessage(message)
     }
   }, [handleWebRTCMessage])
@@ -92,6 +94,7 @@ export function VoiceChatApp() {
   // Handle call matching - use useCallback to prevent recreation
   const createPeerCallback = useCallback((isInitiator: boolean, stream: MediaStream) => {
     if (!isUnmountingRef.current) {
+      console.log('🔗 Creating WebRTC peer for call...')
       return createPeer(isInitiator, stream)
     }
     return null
@@ -99,19 +102,32 @@ export function VoiceChatApp() {
 
   const sendWebRTCMessageCallback = useCallback((message: any) => {
     if (!isUnmountingRef.current) {
+      console.log('📤 Sending WebRTC message:', message.type)
       sendWebRTCMessage(message)
     }
   }, [sendWebRTCMessage])
 
+  // Track call state changes
+  useEffect(() => {
+    if (partner && sessionId) {
+      callInProgressRef.current = true
+      console.log('📞 Call in progress - preventing cleanup')
+    } else if (!isWaiting) {
+      callInProgressRef.current = false
+      console.log('📞 No call in progress')
+    }
+  }, [partner, sessionId, isWaiting])
+
   useEffect(() => {
     if (partner && sessionId && localStream && user?.id && !isUnmountingRef.current) {
-      console.log('Creating WebRTC peer for call...')
+      console.log('🎯 Call matched, creating WebRTC peer...')
       const isInitiator = user.id < partner.id
       const newPeer = createPeerCallback(isInitiator, localStream)
       
       if (newPeer) {
         newPeer.on('signal', (data: any) => {
           if (!isUnmountingRef.current) {
+            console.log('📡 WebRTC signal generated:', data.type || 'ice-candidate')
             if (data.type === 'offer' && data.sdp) {
               sendWebRTCMessageCallback({
                 type: 'offer',
@@ -143,7 +159,7 @@ export function VoiceChatApp() {
   // Handle call ending
   useEffect(() => {
     if (!partner && peer && !isUnmountingRef.current) {
-      console.log('Partner disconnected, cleaning up WebRTC...')
+      console.log('📞 Partner disconnected, cleaning up WebRTC...')
       cleanupWebRTC()
     }
   }, [partner, peer, cleanupWebRTC])
@@ -165,7 +181,7 @@ export function VoiceChatApp() {
     if (isUnmountingRef.current) return
     
     try {
-      console.log('Starting call...')
+      console.log('🚀 Starting call...')
       await initializeAudio()
       setIsInitialized(true)
       setFilters(userFilters || {})
@@ -179,7 +195,8 @@ export function VoiceChatApp() {
   const handleEndCall = useCallback(() => {
     if (isUnmountingRef.current) return
     
-    console.log('Ending call...')
+    console.log('📞 Ending call...')
+    callInProgressRef.current = false
     endCall()
     cleanupWebRTC()
     setIsInitialized(false)

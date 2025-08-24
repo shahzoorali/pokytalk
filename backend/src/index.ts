@@ -69,21 +69,6 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Get user's country by IP
-app.get('/api/location', async (req, res) => {
-  const ip = req.ip || req.connection.remoteAddress || '127.0.0.1';
-  console.log('🌍 Location request from IP:', ip);
-  
-  try {
-    const country = await userManager.getCountryByIP(ip);
-    console.log('✅ Location resolved:', { ip, country });
-    res.json({ country });
-  } catch (error) {
-    console.error('❌ Location lookup failed:', error);
-    res.status(500).json({ error: 'Failed to get location' });
-  }
-});
-
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('❌ Express error:', err);
@@ -101,7 +86,6 @@ const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`🚀 Pokytalk backend server running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`🌍 Location API: http://localhost:${PORT}/api/location`);
   console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
   console.log('✅ Server startup completed');
 });

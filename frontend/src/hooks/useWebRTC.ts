@@ -89,6 +89,11 @@ export function useWebRTC() {
     
     setLocalAudioLevel(normalizedLevel)
     
+    // Log audio level occasionally
+    if (Math.random() < 0.01) { // 1% chance to log
+      console.log('🎵 Audio level:', normalizedLevel.toFixed(3))
+    }
+    
     animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
   }, [])
 
@@ -99,6 +104,11 @@ export function useWebRTC() {
     }
 
     console.log(`🔗 Creating WebRTC peer (initiator: ${initiator})`)
+    console.log('🎤 Stream info:', {
+      id: stream.id,
+      tracks: stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, muted: t.muted })),
+      active: stream.active
+    })
     
     // Clean up existing peer first
     if (peer) {
@@ -140,7 +150,11 @@ export function useWebRTC() {
     newPeer.on('stream', (stream) => {
       if (!isCleaningUpRef.current) {
         setRemoteStream(stream)
-        console.log('📺 Remote stream received')
+        console.log('📺 Remote stream received:', {
+          id: stream.id,
+          tracks: stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, muted: t.muted })),
+          active: stream.active
+        })
       }
     })
 

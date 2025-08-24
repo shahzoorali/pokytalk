@@ -30,17 +30,7 @@ export function ConnectionScreen({ onStartCall, stats }: ConnectionScreenProps) 
     { code: 'MX', name: 'Mexico' },
   ]
 
-  useEffect(() => {
-    // Get user's country
-    fetch('/api/location')
-      .then(res => res.json())
-      .then(data => {
-        if (data.country) {
-          setUserCountry(data.country)
-        }
-      })
-      .catch(console.error)
-  }, [])
+  // Removed location API call since the endpoint was removed
 
   const handleStartCall = async () => {
     setIsLoading(true)
