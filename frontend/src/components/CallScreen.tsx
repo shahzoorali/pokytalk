@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import type React from 'react'
+import type { KeyboardEvent } from 'react'
 import { Phone, Mic, MicOff, MessageSquare, X, Send } from 'lucide-react'
 import { User, ChatMessage } from '@pokytalk/shared'
 import { formatTime } from '@/lib/utils'
@@ -64,7 +64,7 @@ export function CallScreen({
     }
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSendMessage()
