@@ -49,16 +49,7 @@ export function VoiceChatApp() {
     cleanup: cleanupWebRTC,
   } = useWebRTC()
 
-  // Cleanup on unmount - only if not in a call
-  useEffect(() => {
-    return () => {
-      if (!isUnmountingRef.current && !callInProgressRef.current) {
-        console.log('VoiceChatApp unmounting, cleaning up...')
-        isUnmountingRef.current = true
-        cleanupWebRTC()
-      }
-    }
-  }, [cleanupWebRTC])
+  // Removed unmount cleanup to avoid tearing down WebRTC during setup
 
   // Initialize socket connection
   useEffect(() => {
