@@ -118,7 +118,14 @@ export function VoiceChatApp() {
         if (data.type === 'offer' || data.type === 'answer') {
           sendWebRTCMessage({ type: data.type, sdp: data, from: uid, to: pid })
         } else if (data.candidate) {
-          sendWebRTCMessage({ type: 'ice-candidate', candidate: data.candidate, from: uid, to: pid })
+          // Ensure we send a plain RTCIceCandidateInit, not the RTCIceCandidate instance
+          const cand = data.candidate
+          const candidateInit = typeof cand.toJSON === 'function'
+            ? cand.toJSON()
+            : { candidate: cand.candidate, sdpMLineIndex: cand.sdpMLineIndex, sdpMid: cand.sdpMid }
+          if (candidateInit && candidateInit.candidate) {
+            sendWebRTCMessage({ type: 'ice-candidate', candidate: candidateInit, from: uid, to: pid })
+          }
         }
       })
     }
@@ -150,7 +157,13 @@ export function VoiceChatApp() {
                     if (data.type === 'offer' || data.type === 'answer') {
                       sendWebRTCMessage({ type: data.type, sdp: data, from: uid, to: pid })
                     } else if (data.candidate) {
-                      sendWebRTCMessage({ type: 'ice-candidate', candidate: data.candidate, from: uid, to: pid })
+                      const cand = data.candidate
+                      const candidateInit = typeof cand.toJSON === 'function'
+                        ? cand.toJSON()
+                        : { candidate: cand.candidate, sdpMLineIndex: cand.sdpMLineIndex, sdpMid: cand.sdpMid }
+                      if (candidateInit && candidateInit.candidate) {
+                        sendWebRTCMessage({ type: 'ice-candidate', candidate: candidateInit, from: uid, to: pid })
+                      }
                     }
                   })
                 }
