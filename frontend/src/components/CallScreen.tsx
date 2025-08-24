@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import type React from 'react'
 import { Phone, Mic, MicOff, MessageSquare, X, Send } from 'lucide-react'
 import { User, ChatMessage } from '@pokytalk/shared'
 import { formatTime } from '@/lib/utils'
