@@ -14,6 +14,8 @@ export function useWebRTC() {
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const dataArrayRef = useRef<Uint8Array | null>(null)
+  const remoteAnalyserRef = useRef<AnalyserNode | null>(null)
+  const remoteDataArrayRef = useRef<Uint8Array | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const isCleaningUpRef = useRef(false)
 
@@ -75,25 +77,44 @@ export function useWebRTC() {
   }, [localStream])
 
   const updateAudioLevel = useCallback(() => {
-    if (!analyserRef.current || !dataArrayRef.current || isCleaningUpRef.current) return
+    if (isCleaningUpRef.current) return
 
-    // @ts-ignore
-    analyserRef.current.getByteFrequencyData(dataArrayRef.current)
-    
-    let sum = 0
-    for (let i = 0; i < dataArrayRef.current.length; i++) {
-      sum += dataArrayRef.current[i]
+    // Local level
+    if (analyserRef.current && dataArrayRef.current) {
+      // @ts-ignore
+      analyserRef.current.getByteFrequencyData(dataArrayRef.current)
+      let sum = 0
+      for (let i = 0; i < dataArrayRef.current.length; i++) {
+        sum += dataArrayRef.current[i]
+      }
+      const average = sum / dataArrayRef.current.length
+      const normalizedLevel = Math.min(average / 128, 1)
+      setLocalAudioLevel(normalizedLevel)
+      if (Math.random() < 0.01) {
+        console.log('🎵 Local level:', normalizedLevel.toFixed(3))
+      }
     }
-    const average = sum / dataArrayRef.current.length
-    const normalizedLevel = Math.min(average / 128, 1) // Normalize to 0-1
-    
-    setLocalAudioLevel(normalizedLevel)
-    
-    // Log audio level occasionally
-    if (Math.random() < 0.01) { // 1% chance to log
-      console.log('🎵 Audio level:', normalizedLevel.toFixed(3))
+
+    // Remote level
+    if (remoteAnalyserRef.current) {
+      const bins = remoteAnalyserRef.current.frequencyBinCount
+      if (!remoteDataArrayRef.current || remoteDataArrayRef.current.length !== bins) {
+        remoteDataArrayRef.current = new Uint8Array(bins)
+      }
+      // @ts-ignore
+      remoteAnalyserRef.current.getByteFrequencyData(remoteDataArrayRef.current)
+      let sumR = 0
+      for (let i = 0; i < remoteDataArrayRef.current.length; i++) {
+        sumR += remoteDataArrayRef.current[i]
+      }
+      const avgR = sumR / remoteDataArrayRef.current.length
+      const normR = Math.min(avgR / 128, 1)
+      setRemoteAudioLevel(normR)
+      if (Math.random() < 0.01) {
+        console.log('🎵 Remote level:', normR.toFixed(3))
+      }
     }
-    
+
     animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
   }, [])
 
@@ -155,6 +176,18 @@ export function useWebRTC() {
           tracks: stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, muted: t.muted })),
           active: stream.active
         })
+
+        // Set up remote analyser
+        try {
+          if (audioContextRef.current) {
+            const remoteSource = audioContextRef.current.createMediaStreamSource(stream)
+            remoteAnalyserRef.current = audioContextRef.current.createAnalyser()
+            remoteAnalyserRef.current.fftSize = 256
+            remoteSource.connect(remoteAnalyserRef.current)
+          }
+        } catch (e) {
+          console.error('❌ Failed to set up remote analyser:', e)
+        }
       }
     })
 
@@ -270,6 +303,12 @@ export function useWebRTC() {
       audioContextRef.current = null
     }
     
+    // Reset analysers
+    analyserRef.current = null
+    dataArrayRef.current = null
+    remoteAnalyserRef.current = null
+    remoteDataArrayRef.current = null
+
     // Clean up animation frame
     if (animationFrameRef.current) {
       console.log('🧹 Cancelling animation frame')

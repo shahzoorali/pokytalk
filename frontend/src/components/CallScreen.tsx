@@ -18,6 +18,7 @@ interface CallScreenProps {
   onToggleMute: () => void
   onToggleChat: () => void
   onSendMessage: (content: string) => void
+  remoteStream: MediaStream | null
 }
 
 export function CallScreen({
@@ -32,14 +33,28 @@ export function CallScreen({
   onToggleMute,
   onToggleChat,
   onSendMessage,
+  remoteStream,
 }: CallScreenProps) {
   const [messageInput, setMessageInput] = useState('')
   const [callStartTime] = useState(new Date())
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const remoteAudioRef = useRef<HTMLAudioElement>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Attach remote stream to audio element
+  useEffect(() => {
+    if (remoteAudioRef.current && remoteStream) {
+      try {
+        remoteAudioRef.current.srcObject = remoteStream
+        remoteAudioRef.current.play().catch(() => {})
+      } catch {
+        // ignore
+      }
+    }
+  }, [remoteStream])
 
   const handleSendMessage = () => {
     if (messageInput.trim() && messageInput.length <= 3000) {
@@ -57,12 +72,15 @@ export function CallScreen({
 
   return (
     <div className="min-h-screen bg-gray-900 flex">
+      {/* Hidden remote audio element for playback */}
+      <audio ref={remoteAudioRef} autoPlay playsInline />
+
       {/* Main Call Area */}
       <div className={`flex-1 flex flex-col ${showChat ? 'hidden md:flex' : 'flex'}`}>
         {/* Header */}
         <div className="bg-gray-800 p-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+            <div className={`w-3 h-3 ${isWebRTCConnected ? 'bg-green-500' : 'bg-yellow-500'} rounded-full animate-pulse`}></div>
             <span className="text-white font-medium">
               {isWebRTCConnected ? 'Connected' : 'Connecting...'}
             </span>
@@ -182,8 +200,7 @@ export function CallScreen({
                     </p>
                   </div>
                 </div>
-              ))
-            )}
+              ))}
             <div ref={messagesEndRef} />
           </div>
 

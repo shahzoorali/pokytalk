@@ -219,6 +219,7 @@ export function VoiceChatApp() {
         onToggleMute={handleToggleMute}
         onToggleChat={handleToggleChat}
         onSendMessage={sendMessage}
+        remoteStream={remoteStream}
       />
     )
   }
