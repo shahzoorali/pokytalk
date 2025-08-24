@@ -14,6 +14,7 @@ export function VoiceChatApp() {
   const [filters, setFilters] = useState<UserFilters>({})
   const isUnmountingRef = useRef(false)
   const callInProgressRef = useRef(false)
+  const peerSessionRef = useRef<string | null>(null)
   
   const {
     socket,
@@ -49,8 +50,6 @@ export function VoiceChatApp() {
     cleanup: cleanupWebRTC,
   } = useWebRTC()
 
-  // Removed unmount cleanup to avoid tearing down WebRTC during setup
-
   // Initialize socket connection
   useEffect(() => {
     if (socket && !isConnected) {
@@ -82,22 +81,6 @@ export function VoiceChatApp() {
     }
   }, [socket, handleWebRTCMessageCallback])
 
-  // Handle call matching - use useCallback to prevent recreation
-  const createPeerCallback = useCallback((isInitiator: boolean, stream: MediaStream) => {
-    if (!isUnmountingRef.current) {
-      console.log('🔗 Creating WebRTC peer for call...')
-      return createPeer(isInitiator, stream)
-    }
-    return null
-  }, [createPeer])
-
-  const sendWebRTCMessageCallback = useCallback((message: any) => {
-    if (!isUnmountingRef.current) {
-      console.log('📤 Sending WebRTC message:', message.type)
-      sendWebRTCMessage(message)
-    }
-  }, [sendWebRTCMessage])
-
   // Track call state changes
   useEffect(() => {
     if (partner && sessionId) {
@@ -105,52 +88,48 @@ export function VoiceChatApp() {
       console.log('📞 Call in progress - preventing cleanup')
     } else if (!isWaiting) {
       callInProgressRef.current = false
+      peerSessionRef.current = null
       console.log('📞 No call in progress')
     }
-  }, [partner, sessionId, isWaiting])
+  }, [partner?.id, sessionId, isWaiting])
 
+  // Create peer once per session
   useEffect(() => {
-    if (partner && sessionId && localStream && user?.id && !isUnmountingRef.current) {
-      console.log('🎯 Call matched, creating WebRTC peer...')
-      const isInitiator = user.id < partner.id
-      const newPeer = createPeerCallback(isInitiator, localStream)
-      
-      if (newPeer) {
-        newPeer.on('signal', (data: any) => {
-          if (!isUnmountingRef.current) {
-            console.log('📡 WebRTC signal generated:', data.type || 'ice-candidate')
-            if (data.type === 'offer' && data.sdp) {
-              sendWebRTCMessageCallback({
-                type: 'offer',
-                sdp: data.sdp,
-                from: user.id,
-                to: partner.id,
-              })
-            } else if (data.type === 'answer' && data.sdp) {
-              sendWebRTCMessageCallback({
-                type: 'answer',
-                sdp: data.sdp,
-                from: user.id,
-                to: partner.id,
-              })
-            } else if (data.candidate) {
-              sendWebRTCMessageCallback({
-                type: 'ice-candidate',
-                candidate: data.candidate,
-                from: user.id,
-                to: partner.id,
-              })
-            }
-          }
-        })
-      }
+    const uid = user?.id
+    const pid = partner?.id
+    if (!uid || !pid || !sessionId || !localStream) return
+    if (isUnmountingRef.current) return
+
+    // Only create once per session
+    if (peerSessionRef.current === sessionId) {
+      return
     }
-  }, [partner, sessionId, localStream, user, createPeerCallback, sendWebRTCMessageCallback])
+
+    console.log('🎯 Call matched, creating WebRTC peer (guarded by session)...')
+    const isInitiator = uid < pid
+    const newPeer = createPeer(isInitiator, localStream)
+
+    if (newPeer) {
+      peerSessionRef.current = sessionId
+      newPeer.on('signal', (data: any) => {
+        if (isUnmountingRef.current) return
+        console.log('📡 WebRTC signal generated:', data.type || 'ice-candidate')
+        if (data.type === 'offer' && data.sdp) {
+          sendWebRTCMessage({ type: 'offer', sdp: data.sdp, from: uid, to: pid })
+        } else if (data.type === 'answer' && data.sdp) {
+          sendWebRTCMessage({ type: 'answer', sdp: data.sdp, from: uid, to: pid })
+        } else if (data.candidate) {
+          sendWebRTCMessage({ type: 'ice-candidate', candidate: data.candidate, from: uid, to: pid })
+        }
+      })
+    }
+  }, [user?.id, partner?.id, sessionId, localStream, createPeer, sendWebRTCMessage])
 
   // Handle call ending
   useEffect(() => {
     if (!partner && peer && !isUnmountingRef.current) {
       console.log('📞 Partner disconnected, cleaning up WebRTC...')
+      peerSessionRef.current = null
       cleanupWebRTC()
     }
   }, [partner, peer, cleanupWebRTC])
@@ -188,6 +167,7 @@ export function VoiceChatApp() {
     
     console.log('📞 Ending call...')
     callInProgressRef.current = false
+    peerSessionRef.current = null
     endCall()
     cleanupWebRTC()
     setIsInitialized(false)
