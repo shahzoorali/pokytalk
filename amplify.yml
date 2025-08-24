@@ -15,8 +15,6 @@ frontend:
       commands:
         - echo "Installing frontend dependencies..."
         - cd frontend && npm install
-        - echo "Setting up environment variables..."
-        - echo "NEXT_PUBLIC_BACKEND_URL=$BACKEND_URL" >> .env.local
     build:
       commands:
         - echo "Building frontend..."
