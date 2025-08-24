@@ -1,5 +1,5 @@
 version: 1
-backend:
+frontend:
   phases:
     preBuild:
       commands:
@@ -7,24 +7,13 @@ backend:
         - npm install
     build:
       commands:
-        - echo "Building backend..."
-        - cd backend && npm install && npm run build && cd ..
-frontend:
-  phases:
-    preBuild:
-      commands:
-        - echo "Installing frontend dependencies..."
-        - cd frontend && npm install
-    build:
-      commands:
         - echo "Building frontend..."
-        - npm run build
+        - cd frontend && npm install && npm run build
   artifacts:
-    baseDirectory: frontend/.next
+    baseDirectory: frontend/out
     files:
       - '**/*'
   cache:
     paths:
       - frontend/node_modules/**/*
-      - backend/node_modules/**/*
       - node_modules/**/*
