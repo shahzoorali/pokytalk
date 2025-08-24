@@ -67,15 +67,19 @@ export class CallManager {
     return Array.from(this.sessions.values()).filter(session => session.isActive);
   }
 
-  cleanupInactiveSessions(): void {
+  cleanupInactiveSessions(): number {
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    let cleanedCount = 0;
 
     for (const [sessionId, session] of this.sessions.entries()) {
       if (!session.isActive && session.endTime && session.endTime < oneHourAgo) {
         this.sessions.delete(sessionId);
+        cleanedCount++;
       }
     }
+
+    return cleanedCount;
   }
 
   getPartnerId(sessionId: string, userId: string): string | undefined {
