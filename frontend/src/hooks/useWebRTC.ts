@@ -10,6 +10,7 @@ export function useWebRTC() {
   const [isMuted, setIsMuted] = useState(false)
   const [localAudioLevel, setLocalAudioLevel] = useState(0)
   const [remoteAudioLevel, setRemoteAudioLevel] = useState(0)
+  const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected' | 'failed'>('disconnected')
   
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
@@ -18,6 +19,9 @@ export function useWebRTC() {
   const remoteDataArrayRef = useRef<Uint8Array | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const isCleaningUpRef = useRef(false)
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const retryCountRef = useRef(0)
+  const maxRetries = 3
 
   // Cleanup on unmount
   useEffect(() => {
@@ -141,19 +145,82 @@ export function useWebRTC() {
       }
     }
 
+    // Enhanced ICE servers configuration
+    const iceServers = [
+      // Google STUN servers
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+      
+      // Additional STUN servers for better connectivity
+      { urls: 'stun:stun.voiparound.com:3478' },
+      { urls: 'stun:stun.voipbuster.com:3478' },
+      { urls: 'stun:stun.voipstunt.com:3478' },
+      { urls: 'stun:stun.voxgratia.org:3478' },
+      { urls: 'stun:stun.xten.com:3478' },
+      
+      // Free TURN servers (for NAT traversal when STUN fails)
+      {
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      }
+    ]
+
     const newPeer = new Peer({
       initiator,
       stream,
-      trickle: false,
+      trickle: true, // Enable trickle ICE for faster connection
       config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ]
-      }
+        iceServers,
+        iceCandidatePoolSize: 10,
+        iceTransportPolicy: 'all',
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require'
+      },
+      // Additional options for better connectivity
+      objectMode: false
     })
 
     console.log('✅ Peer created successfully')
+    setConnectionState('connecting')
+
+    // Set connection timeout
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current)
+    }
+    connectionTimeoutRef.current = setTimeout(() => {
+      if (connectionState === 'connecting') {
+        console.log('⏰ Connection timeout, retrying...')
+        setConnectionState('failed')
+        if (retryCountRef.current < maxRetries) {
+          retryCountRef.current++
+          console.log(`🔄 Retry attempt ${retryCountRef.current}/${maxRetries}`)
+          // Trigger retry by destroying and recreating peer
+          if (newPeer) {
+            try {
+              newPeer.destroy()
+            } catch (error) {
+              console.error('Error destroying peer on timeout:', error)
+            }
+          }
+        } else {
+          console.error('❌ Max retries reached, connection failed')
+        }
+      }
+    }, 15000) // 15 second timeout
 
     newPeer.on('signal', (data) => {
       if (!isCleaningUpRef.current) {
@@ -164,6 +231,12 @@ export function useWebRTC() {
     newPeer.on('connect', () => {
       if (!isCleaningUpRef.current) {
         setIsConnected(true)
+        setConnectionState('connected')
+        retryCountRef.current = 0 // Reset retry count on successful connection
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current)
+          connectionTimeoutRef.current = null
+        }
         console.log('✅ WebRTC connected successfully')
       }
     })
@@ -195,6 +268,11 @@ export function useWebRTC() {
       if (!isCleaningUpRef.current) {
         setIsConnected(false)
         setRemoteStream(null)
+        setConnectionState('disconnected')
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current)
+          connectionTimeoutRef.current = null
+        }
         console.log('🔌 WebRTC connection closed')
       }
     })
@@ -202,14 +280,40 @@ export function useWebRTC() {
     newPeer.on('error', (error) => {
       console.error('❌ WebRTC error:', error)
       if (!isCleaningUpRef.current) {
-        // Don't auto-cleanup on error, let the component handle it
-        console.log('⚠️ WebRTC error occurred, but not cleaning up automatically')
+        setConnectionState('failed')
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current)
+          connectionTimeoutRef.current = null
+        }
+        
+        // Auto-retry on certain errors
+        if (retryCountRef.current < maxRetries && 
+            (error.message.includes('ICE') || error.message.includes('connection'))) {
+          retryCountRef.current++
+          console.log(`🔄 Auto-retry on error (${retryCountRef.current}/${maxRetries})`)
+          setTimeout(() => {
+            if (!isCleaningUpRef.current) {
+              // The component will handle recreating the peer
+              console.log('🔄 Triggering peer recreation after error')
+            }
+          }, 2000)
+        }
+      }
+    })
+
+    // Monitor ICE connection state
+    newPeer.on('iceStateChange', (state) => {
+      console.log('🧊 ICE connection state:', state)
+      if (state === 'failed' || state === 'disconnected') {
+        setConnectionState('failed')
+      } else if (state === 'connected' || state === 'completed') {
+        setConnectionState('connected')
       }
     })
 
     setPeer(newPeer)
     return newPeer
-  }, [peer])
+  }, [peer, connectionState])
 
   const handleWebRTCMessage = useCallback((message: WebRTCMessage) => {
     if (!peer || isCleaningUpRef.current) {
@@ -254,6 +358,12 @@ export function useWebRTC() {
 
     console.log('🧹 Starting WebRTC cleanup...')
     isCleaningUpRef.current = true
+    
+    // Clean up connection timeout
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current)
+      connectionTimeoutRef.current = null
+    }
     
     // Clean up peer connection
     if (peer) {
@@ -321,6 +431,8 @@ export function useWebRTC() {
     setIsMuted(false)
     setLocalAudioLevel(0)
     setRemoteAudioLevel(0)
+    setConnectionState('disconnected')
+    retryCountRef.current = 0
     
     console.log('✅ WebRTC cleanup completed')
   }, [peer, localStream, remoteStream])
@@ -333,6 +445,7 @@ export function useWebRTC() {
     isMuted,
     localAudioLevel,
     remoteAudioLevel,
+    connectionState,
     initializeAudio,
     createPeer,
     handleWebRTCMessage,

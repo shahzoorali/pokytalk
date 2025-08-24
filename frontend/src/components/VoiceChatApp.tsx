@@ -43,6 +43,7 @@ export function VoiceChatApp() {
     isMuted,
     localAudioLevel,
     remoteAudioLevel,
+    connectionState,
     initializeAudio,
     createPeer,
     handleWebRTCMessage,
@@ -122,6 +123,46 @@ export function VoiceChatApp() {
       })
     }
   }, [user?.id, partner?.id, sessionId, localStream, createPeer, sendWebRTCMessage])
+
+  // Handle connection state changes and retry logic
+  useEffect(() => {
+    if (connectionState === 'failed' && partner && sessionId && localStream) {
+      console.log('🔄 Connection failed, attempting retry...')
+      const retryTimeout = setTimeout(() => {
+        if (!isUnmountingRef.current && connectionState === 'failed') {
+          console.log('🔄 Retrying WebRTC connection...')
+          peerSessionRef.current = null // Reset session to allow recreation
+          cleanupWebRTC()
+          
+          // Recreate peer after cleanup
+          setTimeout(() => {
+            if (!isUnmountingRef.current && partner && sessionId && localStream) {
+              const uid = user?.id
+              const pid = partner?.id
+              if (uid && pid) {
+                const isInitiator = uid < pid
+                const newPeer = createPeer(isInitiator, localStream)
+                if (newPeer) {
+                  peerSessionRef.current = sessionId
+                  newPeer.on('signal', (data: any) => {
+                    if (isUnmountingRef.current) return
+                    console.log('📡 WebRTC signal generated (retry):', data.type || 'candidate')
+                    if (data.type === 'offer' || data.type === 'answer') {
+                      sendWebRTCMessage({ type: data.type, sdp: data, from: uid, to: pid })
+                    } else if (data.candidate) {
+                      sendWebRTCMessage({ type: 'ice-candidate', candidate: data.candidate, from: uid, to: pid })
+                    }
+                  })
+                }
+              }
+            }
+          }, 1000)
+        }
+      }, 3000) // Wait 3 seconds before retrying
+
+      return () => clearTimeout(retryTimeout)
+    }
+  }, [connectionState, partner, sessionId, localStream, user?.id, createPeer, sendWebRTCMessage, cleanupWebRTC])
 
   // Handle call ending
   useEffect(() => {
@@ -207,20 +248,21 @@ export function VoiceChatApp() {
 
   if (partner && sessionId) {
     return (
-      <CallScreen
-        partner={partner}
-        isWebRTCConnected={isWebRTCConnected}
-        isMuted={isMuted}
-        localAudioLevel={localAudioLevel}
-        remoteAudioLevel={remoteAudioLevel}
-        messages={messages}
-        showChat={showFilters}
-        onEndCall={handleEndCall}
-        onToggleMute={handleToggleMute}
-        onToggleChat={handleToggleChat}
-        onSendMessage={sendMessage}
-        remoteStream={remoteStream}
-      />
+              <CallScreen
+          partner={partner}
+          isWebRTCConnected={isWebRTCConnected}
+          connectionState={connectionState}
+          isMuted={isMuted}
+          localAudioLevel={localAudioLevel}
+          remoteAudioLevel={remoteAudioLevel}
+          messages={messages}
+          showChat={showFilters}
+          onEndCall={handleEndCall}
+          onToggleMute={handleToggleMute}
+          onToggleChat={handleToggleChat}
+          onSendMessage={sendMessage}
+          remoteStream={remoteStream}
+        />
     )
   }
 

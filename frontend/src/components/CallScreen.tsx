@@ -9,6 +9,7 @@ import { AudioLevelBar } from './AudioLevelBar'
 interface CallScreenProps {
   partner: User
   isWebRTCConnected: boolean
+  connectionState: 'disconnected' | 'connecting' | 'connected' | 'failed'
   isMuted: boolean
   localAudioLevel: number
   remoteAudioLevel: number
@@ -24,6 +25,7 @@ interface CallScreenProps {
 export function CallScreen({
   partner,
   isWebRTCConnected,
+  connectionState,
   isMuted,
   localAudioLevel,
   remoteAudioLevel,
@@ -75,10 +77,19 @@ export function CallScreen({
       <div className={`flex-1 flex flex-col ${showChat ? 'hidden md:flex' : 'flex'}`}>
         <div className="bg-gray-800 p-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className={`w-3 h-3 ${isWebRTCConnected ? 'bg-green-500' : 'bg-yellow-500'} rounded-full animate-pulse`}></div>
+            <div className={`w-3 h-3 ${
+              connectionState === 'connected' ? 'bg-green-500' : 
+              connectionState === 'connecting' ? 'bg-yellow-500' : 
+              connectionState === 'failed' ? 'bg-red-500' : 'bg-gray-500'
+            } rounded-full animate-pulse`}></div>
             <span className="text-white font-medium">
-              {isWebRTCConnected ? 'Connected' : 'Connecting...'}
+              {connectionState === 'connected' ? 'Connected' : 
+               connectionState === 'connecting' ? 'Connecting...' : 
+               connectionState === 'failed' ? 'Connection Failed' : 'Disconnected'}
             </span>
+            {connectionState === 'failed' && (
+              <span className="text-red-400 text-xs ml-2">Check your network</span>
+            )}
           </div>
           <div className="text-gray-400 text-sm">
             {formatTime(callStartTime)}
