@@ -16,19 +16,20 @@ export function useWebRTC() {
   const dataArrayRef = useRef<Uint8Array | null>(null)
   const animationFrameRef = useRef<number | null>(null)
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close()
-      }
+      cleanup()
     }
   }, [])
 
   const initializeAudio = async () => {
     try {
+      // Clean up any existing stream first
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop())
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -41,14 +42,17 @@ export function useWebRTC() {
       setLocalStream(stream)
 
       // Set up audio analysis
+      if (audioContextRef.current) {
+        audioContextRef.current.close()
+      }
       audioContextRef.current = new AudioContext()
       const source = audioContextRef.current.createMediaStreamSource(stream)
       analyserRef.current = audioContextRef.current.createAnalyser()
       analyserRef.current.fftSize = 256
       source.connect(analyserRef.current)
 
-          const bufferLength = analyserRef.current.frequencyBinCount
-    dataArrayRef.current = new Uint8Array(bufferLength) as Uint8Array
+      const bufferLength = analyserRef.current.frequencyBinCount
+      dataArrayRef.current = new Uint8Array(bufferLength) as Uint8Array
 
       // Start monitoring audio levels
       updateAudioLevel()
@@ -79,6 +83,11 @@ export function useWebRTC() {
   }
 
   const createPeer = (initiator: boolean, stream: MediaStream) => {
+    // Clean up existing peer first
+    if (peer) {
+      peer.destroy()
+    }
+
     const newPeer = new Peer({
       initiator,
       stream,
@@ -113,6 +122,8 @@ export function useWebRTC() {
 
     newPeer.on('error', (error) => {
       console.error('WebRTC error:', error)
+      // Clean up on error
+      cleanup()
     })
 
     setPeer(newPeer)
@@ -122,16 +133,20 @@ export function useWebRTC() {
   const handleWebRTCMessage = (message: WebRTCMessage) => {
     if (!peer) return
 
-    switch (message.type) {
-      case 'offer':
-        peer.signal(message.sdp)
-        break
-      case 'answer':
-        peer.signal(message.sdp)
-        break
-      case 'ice-candidate':
-        peer.signal(message.candidate)
-        break
+    try {
+      switch (message.type) {
+        case 'offer':
+          peer.signal(message.sdp)
+          break
+        case 'answer':
+          peer.signal(message.sdp)
+          break
+        case 'ice-candidate':
+          peer.signal(message.candidate)
+          break
+      }
+    } catch (error) {
+      console.error('Error handling WebRTC message:', error)
     }
   }
 
@@ -146,26 +161,65 @@ export function useWebRTC() {
   }
 
   const cleanup = () => {
+    console.log('Cleaning up WebRTC connections...')
+    
+    // Clean up peer connection
     if (peer) {
-      peer.destroy()
+      try {
+        peer.destroy()
+      } catch (error) {
+        console.error('Error destroying peer:', error)
+      }
       setPeer(null)
     }
     
+    // Clean up local stream
     if (localStream) {
-      localStream.getTracks().forEach(track => track.stop())
+      try {
+        localStream.getTracks().forEach(track => {
+          track.stop()
+        })
+      } catch (error) {
+        console.error('Error stopping tracks:', error)
+      }
       setLocalStream(null)
     }
     
-    setRemoteStream(null)
-    setIsConnected(false)
-    setIsMuted(false)
-    setLocalAudioLevel(0)
-    setRemoteAudioLevel(0)
-
+    // Clean up remote stream
+    if (remoteStream) {
+      try {
+        remoteStream.getTracks().forEach(track => {
+          track.stop()
+        })
+      } catch (error) {
+        console.error('Error stopping remote tracks:', error)
+      }
+      setRemoteStream(null)
+    }
+    
+    // Clean up audio context
+    if (audioContextRef.current) {
+      try {
+        audioContextRef.current.close()
+      } catch (error) {
+        console.error('Error closing audio context:', error)
+      }
+      audioContextRef.current = null
+    }
+    
+    // Clean up animation frame
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current)
       animationFrameRef.current = null
     }
+    
+    // Reset state
+    setIsConnected(false)
+    setIsMuted(false)
+    setLocalAudioLevel(0)
+    setRemoteAudioLevel(0)
+    
+    console.log('WebRTC cleanup completed')
   }
 
   return {

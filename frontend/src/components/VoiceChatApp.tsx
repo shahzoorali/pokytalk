@@ -47,6 +47,14 @@ export function VoiceChatApp() {
     cleanup: cleanupWebRTC,
   } = useWebRTC()
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      console.log('VoiceChatApp unmounting, cleaning up...')
+      cleanupWebRTC()
+    }
+  }, [cleanupWebRTC])
+
   // Initialize socket connection
   useEffect(() => {
     if (socket && !isConnected) {
@@ -61,11 +69,20 @@ export function VoiceChatApp() {
       socket.on('webrtc:answer', handleWebRTCMessage)
       socket.on('webrtc:ice-candidate', handleWebRTCMessage)
     }
+
+    return () => {
+      if (socket) {
+        socket.off('webrtc:offer', handleWebRTCMessage)
+        socket.off('webrtc:answer', handleWebRTCMessage)
+        socket.off('webrtc:ice-candidate', handleWebRTCMessage)
+      }
+    }
   }, [socket, handleWebRTCMessage])
 
   // Handle call matching
   useEffect(() => {
     if (partner && sessionId && localStream && user?.id) {
+      console.log('Creating WebRTC peer for call...')
       const isInitiator = user.id < partner.id
       const newPeer = createPeer(isInitiator, localStream)
       
@@ -99,6 +116,7 @@ export function VoiceChatApp() {
   // Handle call ending
   useEffect(() => {
     if (!partner && peer) {
+      console.log('Partner disconnected, cleaning up WebRTC...')
       cleanupWebRTC()
     }
   }, [partner, peer, cleanupWebRTC])
@@ -114,6 +132,7 @@ export function VoiceChatApp() {
 
   const handleStartCall = async (userFilters?: UserFilters) => {
     try {
+      console.log('Starting call...')
       await initializeAudio()
       setIsInitialized(true)
       setFilters(userFilters || {})
@@ -125,6 +144,7 @@ export function VoiceChatApp() {
   }
 
   const handleEndCall = () => {
+    console.log('Ending call...')
     endCall()
     cleanupWebRTC()
     setIsInitialized(false)
