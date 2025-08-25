@@ -47,11 +47,16 @@ export function useSocket() {
       setIsWaiting(true)
     })
 
-    newSocket.on('call:matched', (partnerData: User, sessionId: string) => {
+    newSocket.on('call:matched', (partnerData: User, sessionId: string, initiatorId?: string) => {
       setPartner(partnerData)
       setSessionId(sessionId)
       setIsWaiting(false)
-      console.log('Matched with partner:', partnerData.id)
+      if (initiatorId) {
+        // Store initiatorId on socket instance for quick access by components
+        // @ts-expect-error augment runtime value
+        newSocket.__webrtcInitiatorId = initiatorId
+      }
+      console.log('Matched with partner:', partnerData.id, 'initiatorId:', initiatorId)
     })
 
     newSocket.on('call:ended', (sessionId: string) => {

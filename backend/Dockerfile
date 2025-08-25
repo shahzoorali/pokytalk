@@ -3,17 +3,25 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
-COPY tsconfig.json ./
+COPY backend/package*.json ./
+COPY backend/tsconfig.json ./
 
 # Copy shared package
-COPY ../shared ./shared
+COPY shared ./shared
 
-# Install dependencies
-RUN npm ci --only=production
+# Install dependencies (including dev deps for build)
+RUN npm install
+
+# Build shared package first
+WORKDIR /app/shared
+RUN npm install && npm run build
+WORKDIR /app
 
 # Copy source code
-COPY src ./src
+COPY backend/src ./src
+
+# Update tsconfig paths for Docker build
+RUN sed -i 's|"../shared/src"|"./shared/src"|g' tsconfig.json
 
 # Build the application
 RUN npm run build

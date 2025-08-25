@@ -151,9 +151,10 @@ export function CallScreen({
               <X className="w-6 h-6" />
             </button>
 
+            {/* Chat toggle on mobile and desktop */}
             <button
               onClick={onToggleChat}
-              className="p-4 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors md:hidden"
+              className="p-4 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors"
             >
               <MessageSquare className="w-6 h-6" />
             </button>
@@ -163,8 +164,11 @@ export function CallScreen({
 
       {showChat && (
         <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col md:hidden">
-          <div className="p-4 border-b border-gray-700">
+          <div className="p-4 border-b border-gray-700 flex items-center justify-between">
             <h3 className="text-white font-medium">Chat</h3>
+            <button onClick={onToggleChat} className="text-gray-300 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -215,8 +219,11 @@ export function CallScreen({
 
       {showChat && (
         <div className="hidden md:block w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
-          <div className="p-4 border-b border-gray-700">
+          <div className="p-4 border-b border-gray-700 flex items-center justify-between">
             <h3 className="text-white font-medium">Chat</h3>
+            <button onClick={onToggleChat} className="text-gray-300 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-3">

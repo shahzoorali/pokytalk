@@ -71,7 +71,7 @@ export interface SocketEvents {
   
   // Call events
   'call:request': (filters: UserFilters) => void;
-  'call:matched': (partner: User, sessionId: string) => void;
+  'call:matched': (partner: User, sessionId: string, initiatorId?: string) => void;
   'call:end': (sessionId: string) => void;
   'call:ended': (sessionId: string) => void;
   

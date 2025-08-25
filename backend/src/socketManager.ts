@@ -76,9 +76,11 @@ export class SocketManager {
           this.userManager.updateUser(userId, { isInCall: true, partnerId: partner.id });
           this.userManager.updateUser(partner.id, { isInCall: true, partnerId: userId });
 
-          // Notify both users
-          socket.emit('call:matched', partner, session.id);
-          this.io.to(partner.socketId).emit('call:matched', user, session.id);
+          // Deterministically choose an initiator so only one side creates the offer
+          const initiatorId = user.id < partner.id ? user.id : partner.id;
+          // Notify both users with initiator information
+          socket.emit('call:matched', partner, session.id, initiatorId);
+          this.io.to(partner.socketId).emit('call:matched', user, session.id, initiatorId);
 
           this.statsManager.incrementTotalSessions();
           this.updateStats();
@@ -139,13 +141,16 @@ export class SocketManager {
       });
 
       // Handle WebRTC signaling
-      socket.on('webrtc:offer', (offer) => {
+      socket.on('webrtc:offer', (offer: WebRTCMessage & { to: string; from: string; sdp?: any }) => {
         const userId = socket.data.userId;
         console.log(`📡 WebRTC offer from ${userId} to ${offer.to}:`, {
           type: offer.type,
           from: offer.from,
           to: offer.to,
-          sdpLength: offer.sdp?.length || 0
+          sdpLength: offer.sdp?.length || 0,
+          sdpType: offer.sdp?.type,
+          sdpPreview: offer.sdp?.sdp?.substring(0, 100) + '...',
+          fullSdp: offer.sdp
         });
         
         const partner = this.userManager.getUser(offer.to);
@@ -157,13 +162,16 @@ export class SocketManager {
         }
       });
 
-      socket.on('webrtc:answer', (answer) => {
+      socket.on('webrtc:answer', (answer: WebRTCMessage & { to: string; from: string; sdp?: any }) => {
         const userId = socket.data.userId;
         console.log(`📡 WebRTC answer from ${userId} to ${answer.to}:`, {
           type: answer.type,
           from: answer.from,
           to: answer.to,
-          sdpLength: answer.sdp?.length || 0
+          sdpLength: answer.sdp?.length || 0,
+          sdpType: answer.sdp?.type,
+          sdpPreview: answer.sdp?.sdp?.substring(0, 100) + '...',
+          fullSdp: answer.sdp
         });
         
         const partner = this.userManager.getUser(answer.to);
@@ -175,13 +183,15 @@ export class SocketManager {
         }
       });
 
-      socket.on('webrtc:ice-candidate', (candidate) => {
+      socket.on('webrtc:ice-candidate', (candidate: WebRTCMessage & { to: string; from: string; candidate?: any }) => {
         const userId = socket.data.userId;
         console.log(`📡 WebRTC ICE candidate from ${userId} to ${candidate.to}:`, {
           type: candidate.type,
           from: candidate.from,
           to: candidate.to,
-          candidateType: candidate.candidate?.type || 'unknown'
+          candidateType: candidate.candidate?.type || 'unknown',
+          candidateData: candidate.candidate,
+          candidatePreview: candidate.candidate?.candidate?.substring(0, 100) + '...'
         });
         
         const partner = this.userManager.getUser(candidate.to);

@@ -12,11 +12,15 @@ import { StatsManager } from './statsManager';
 
 dotenv.config();
 
+// Enable debug logging (env-controlled only)
+const DEBUG = process.env.DEBUG === 'true';
+
 console.log('🚀 Starting Pokytalk backend server...');
 console.log('📋 Environment:', {
   NODE_ENV: process.env.NODE_ENV,
   PORT: process.env.PORT || 3001,
-  CORS_ORIGIN: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000'
+  CORS_ORIGIN: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000',
+  DEBUG: DEBUG
 });
 
 const app = express();

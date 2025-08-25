@@ -15,6 +15,7 @@ export function VoiceChatApp() {
   const isUnmountingRef = useRef(false)
   const callInProgressRef = useRef(false)
   const peerSessionRef = useRef<string | null>(null)
+  const pendingOfferRef = useRef<any | null>(null)
   
   const {
     socket,
@@ -60,11 +61,88 @@ export function VoiceChatApp() {
 
   // Handle WebRTC signaling - use useCallback to prevent recreation
   const handleWebRTCMessageCallback = useCallback((message: any) => {
-    if (!isUnmountingRef.current) {
-      console.log('📨 Received WebRTC message:', message.type)
-      handleWebRTCMessage(message)
+    if (isUnmountingRef.current) return
+    console.log('📨 Received WebRTC message in VoiceChatApp:', {
+      type: message.type,
+      from: message.from,
+      to: message.to,
+      hasSdp: !!message.sdp,
+      hasCandidate: !!message.candidate
+    })
+
+    // If an offer arrives before peer is created on the non-initiator, create it now
+    if (message.type === 'offer' && !peer && partner && sessionId && localStream) {
+      try {
+        console.log('⚙️ Creating non-initiator peer on offer reception')
+        const uid = user?.id
+        const pid = partner?.id
+        if (uid && pid) {
+          const created = createPeer(false, localStream, (data: any) => {
+            if (isUnmountingRef.current) return
+            console.log('📡 WebRTC signal (answer path):', data.type || 'candidate')
+            if (data.type === 'offer' || data.type === 'answer') {
+              sendWebRTCMessage({ type: data.type, sdp: data, from: uid, to: pid })
+            } else if (data.candidate) {
+              const candidateData = {
+                candidate: data.candidate.candidate,
+                sdpMLineIndex: data.candidate.sdpMLineIndex,
+                sdpMid: data.candidate.sdpMid
+              }
+              sendWebRTCMessage({ type: 'ice-candidate', candidate: candidateData, from: uid, to: pid })
+            }
+          }, message.sdp)
+          if (created) {
+            peerSessionRef.current = sessionId
+          }
+        }
+      } catch (e) {
+        console.error('❌ Failed to create peer on offer reception:', e)
+      }
     }
-  }, [handleWebRTCMessage])
+
+    // If no localStream yet, store offer to apply when stream becomes available
+    if (message.type === 'offer' && !localStream && partner && sessionId) {
+      console.log('🕒 Queuing offer until local stream is ready')
+      pendingOfferRef.current = message.sdp
+    }
+
+    handleWebRTCMessage(message)
+  }, [peer, partner, sessionId, localStream, user?.id, createPeer, sendWebRTCMessage, handleWebRTCMessage])
+
+  // If we queued an offer before mic stream was ready, create peer now and apply it
+  useEffect(() => {
+    if (isUnmountingRef.current) return
+    if (!pendingOfferRef.current) return
+    if (!partner || !sessionId || !localStream || peer) return
+
+    try {
+      console.log('⚙️ Creating non-initiator peer from queued offer')
+      const uid = user?.id
+      const pid = partner?.id
+      if (uid && pid) {
+        const created = createPeer(false, localStream, (data: any) => {
+          if (isUnmountingRef.current) return
+          console.log('📡 WebRTC signal (answer path - queued):', data.type || 'candidate')
+          if (data.type === 'offer' || data.type === 'answer') {
+            sendWebRTCMessage({ type: data.type, sdp: data, from: uid, to: pid })
+          } else if (data.candidate) {
+            const candidateData = {
+              candidate: data.candidate.candidate,
+              sdpMLineIndex: data.candidate.sdpMLineIndex,
+              sdpMid: data.candidate.sdpMid
+            }
+            sendWebRTCMessage({ type: 'ice-candidate', candidate: candidateData, from: uid, to: pid })
+          }
+        }, pendingOfferRef.current)
+        if (created) {
+          peerSessionRef.current = sessionId
+          pendingOfferRef.current = null
+        }
+      }
+    } catch (e) {
+      console.error('❌ Failed to create peer from queued offer:', e)
+    }
+  }, [partner, sessionId, localStream, peer, user?.id, createPeer, sendWebRTCMessage])
 
   useEffect(() => {
     if (socket && !isUnmountingRef.current) {
@@ -98,36 +176,68 @@ export function VoiceChatApp() {
   useEffect(() => {
     const uid = user?.id
     const pid = partner?.id
-    if (!uid || !pid || !sessionId || !localStream) return
+    console.log('🔍 Peer creation effect triggered:', {
+      uid,
+      pid,
+      sessionId,
+      hasLocalStream: !!localStream,
+      localStreamId: localStream?.id,
+      localStreamTracks: localStream?.getTracks()?.map(t => t.kind),
+      isUnmounting: isUnmountingRef.current,
+      peerSession: peerSessionRef.current,
+      user: !!user,
+      partner: !!partner
+    })
+    
+    if (!uid || !pid || !sessionId || !localStream) {
+      console.log('❌ Missing required data for peer creation:', {
+        missingUid: !uid,
+        missingPid: !pid,
+        missingSessionId: !sessionId,
+        missingLocalStream: !localStream
+      })
+      return
+    }
     if (isUnmountingRef.current) return
 
     // Only create once per session
     if (peerSessionRef.current === sessionId) {
+      console.log('⏭️ Skipping peer creation - already created for this session')
       return
     }
 
     console.log('🎯 Call matched, creating WebRTC peer (guarded by session)...')
-    const isInitiator = uid < pid
-    const newPeer = createPeer(isInitiator, localStream)
+    // Prefer server-declared initiator if provided via socket
+    const serverInitiatorId: string | undefined = (socket as any)?.__webrtcInitiatorId
+    const isInitiator = serverInitiatorId ? uid === serverInitiatorId : uid < pid
+    console.log('🎯 Initiator check:', { uid, pid, isInitiator })
+    
+    console.log('🎯 About to call createPeer with:', { isInitiator, localStreamId: localStream?.id })
+    const newPeer = createPeer(isInitiator, localStream, (data: any) => {
+      if (isUnmountingRef.current) return
+      console.log('📡 WebRTC signal generated:', data.type || 'candidate')
+      if (data.type === 'offer' || data.type === 'answer') {
+        sendWebRTCMessage({ type: data.type, sdp: data, from: uid, to: pid })
+      } else if (data.candidate) {
+        // Format the candidate data properly for simple-peer
+        console.log('🧊 Sending ICE candidate:', data.candidate)
+        const candidateData = {
+          candidate: data.candidate.candidate,
+          sdpMLineIndex: data.candidate.sdpMLineIndex,
+          sdpMid: data.candidate.sdpMid
+        }
+        sendWebRTCMessage({ type: 'ice-candidate', candidate: candidateData, from: uid, to: pid })
+      }
+    })
+    
+    if (newPeer) {
+      console.log('✅ Peer created successfully')
+    } else {
+      console.log('❌ Peer creation failed')
+    }
 
     if (newPeer) {
       peerSessionRef.current = sessionId
-      newPeer.on('signal', (data: any) => {
-        if (isUnmountingRef.current) return
-        console.log('📡 WebRTC signal generated:', data.type || 'candidate')
-        if (data.type === 'offer' || data.type === 'answer') {
-          sendWebRTCMessage({ type: data.type, sdp: data, from: uid, to: pid })
-        } else if (data.candidate) {
-          // Ensure we send a plain RTCIceCandidateInit, not the RTCIceCandidate instance
-          const cand = data.candidate
-          const candidateInit = typeof cand.toJSON === 'function'
-            ? cand.toJSON()
-            : { candidate: cand.candidate, sdpMLineIndex: cand.sdpMLineIndex, sdpMid: cand.sdpMid }
-          if (candidateInit && candidateInit.candidate) {
-            sendWebRTCMessage({ type: 'ice-candidate', candidate: candidateInit, from: uid, to: pid })
-          }
-        }
-      })
     }
   }, [user?.id, partner?.id, sessionId, localStream, createPeer, sendWebRTCMessage])
 
@@ -157,13 +267,14 @@ export function VoiceChatApp() {
                     if (data.type === 'offer' || data.type === 'answer') {
                       sendWebRTCMessage({ type: data.type, sdp: data, from: uid, to: pid })
                     } else if (data.candidate) {
-                      const cand = data.candidate
-                      const candidateInit = typeof cand.toJSON === 'function'
-                        ? cand.toJSON()
-                        : { candidate: cand.candidate, sdpMLineIndex: cand.sdpMLineIndex, sdpMid: cand.sdpMid }
-                      if (candidateInit && candidateInit.candidate) {
-                        sendWebRTCMessage({ type: 'ice-candidate', candidate: candidateInit, from: uid, to: pid })
+                      // Format the candidate data properly for simple-peer
+                      console.log('🧊 Sending ICE candidate (retry):', data.candidate)
+                      const candidateData = {
+                        candidate: data.candidate.candidate,
+                        sdpMLineIndex: data.candidate.sdpMLineIndex,
+                        sdpMid: data.candidate.sdpMid
                       }
+                      sendWebRTCMessage({ type: 'ice-candidate', candidate: candidateData, from: uid, to: pid })
                     }
                   })
                 }

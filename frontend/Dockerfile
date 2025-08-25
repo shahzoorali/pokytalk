@@ -3,17 +3,20 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
-COPY tsconfig.json ./
-COPY next.config.js ./
-COPY tailwind.config.js ./
-COPY postcss.config.js ./
+COPY frontend/package*.json ./
+COPY frontend/tsconfig.json ./
+COPY frontend/next.config.js ./
+COPY frontend/tailwind.config.js ./
+COPY frontend/postcss.config.js ./
 
 # Install dependencies
 RUN npm install
 
+# Copy shared package
+COPY shared ./shared
+
 # Copy source code
-COPY . .
+COPY frontend/src ./src
 
 EXPOSE 3000
 

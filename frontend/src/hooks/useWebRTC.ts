@@ -23,12 +23,79 @@ export function useWebRTC() {
   const retryCountRef = useRef(0)
   const maxRetries = 3
 
-  // Cleanup on unmount
+  // Keep latest state in refs for proper unmount cleanup without re-running effect
+  const peerStateRef = useRef<Peer.Instance | null>(null)
+  const localStreamStateRef = useRef<MediaStream | null>(null)
+  const remoteStreamStateRef = useRef<MediaStream | null>(null)
+
+  // Sync refs with state
+  useEffect(() => { peerStateRef.current = peer }, [peer])
+  useEffect(() => { localStreamStateRef.current = localStream }, [localStream])
+  useEffect(() => { remoteStreamStateRef.current = remoteStream }, [remoteStream])
+
+  // Cleanup on unmount ONLY
   useEffect(() => {
     return () => {
-      if (!isCleaningUpRef.current) {
-        console.log('useWebRTC hook unmounting, cleaning up...')
-        cleanup()
+      console.log('useWebRTC hook unmounting, cleaning up...')
+      // Clean up connection timeout
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current)
+        connectionTimeoutRef.current = null
+      }
+
+      // Clean up peer connection
+      const peerInstance = peerStateRef.current
+      if (peerInstance) {
+        try {
+          console.log('🧹 Destroying peer connection')
+          peerInstance.destroy()
+        } catch (error) {
+          console.error('❌ Error destroying peer:', error)
+        }
+      }
+
+      // Clean up local stream
+      const ls = localStreamStateRef.current
+      if (ls) {
+        try {
+          console.log('🧹 Stopping local stream tracks')
+          ls.getTracks().forEach(track => {
+            track.stop()
+          })
+        } catch (error) {
+          console.error('❌ Error stopping tracks:', error)
+        }
+      }
+
+      // Clean up remote stream
+      const rs = remoteStreamStateRef.current
+      if (rs) {
+        try {
+          console.log('🧹 Stopping remote stream tracks')
+          rs.getTracks().forEach(track => {
+            track.stop()
+          })
+        } catch (error) {
+          console.error('❌ Error stopping remote tracks:', error)
+        }
+      }
+
+      // Clean up audio context
+      if (audioContextRef.current) {
+        try {
+          console.log('🧹 Closing audio context')
+          if (audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close()
+          }
+        } catch (error) {
+          console.error('❌ Error closing audio context:', error)
+        }
+      }
+
+      // Clean up animation frame
+      if (animationFrameRef.current) {
+        console.log('🧹 Cancelling animation frame')
+        cancelAnimationFrame(animationFrameRef.current)
       }
     }
   }, [])
@@ -58,7 +125,13 @@ export function useWebRTC() {
       // Set up audio analysis
       if (audioContextRef.current) {
         console.log('🧹 Cleaning up existing audio context')
-        audioContextRef.current.close()
+        try {
+          if (audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close()
+          }
+        } catch (error) {
+          console.error('❌ Error closing audio context:', error)
+        }
       }
       audioContextRef.current = new AudioContext()
       const source = audioContextRef.current.createMediaStreamSource(stream)
@@ -81,7 +154,6 @@ export function useWebRTC() {
   }, [localStream])
 
   const updateAudioLevel = useCallback(() => {
-    if (isCleaningUpRef.current) return
 
     // Local level
     if (analyserRef.current && dataArrayRef.current) {
@@ -122,11 +194,7 @@ export function useWebRTC() {
     animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
   }, [])
 
-  const createPeer = useCallback((initiator: boolean, stream: MediaStream) => {
-    if (isCleaningUpRef.current) {
-      console.log('⚠️ Skipping peer creation - cleanup in progress')
-      return null
-    }
+  const createPeer = useCallback((initiator: boolean, stream: MediaStream, onSignal?: (data: any) => void, initialRemoteSignal?: any) => {
 
     console.log(`🔗 Creating WebRTC peer (initiator: ${initiator})`)
     console.log('🎤 Stream info:', {
@@ -182,7 +250,7 @@ export function useWebRTC() {
     const newPeer = new Peer({
       initiator,
       stream,
-      trickle: true, // Enable trickle ICE for faster connection
+      trickle: false, // Disable trickle to avoid early-offer race
       config: {
         iceServers,
         iceCandidatePoolSize: 10,
@@ -222,82 +290,94 @@ export function useWebRTC() {
       }
     }, 15000) // 15 second timeout
 
-    newPeer.on('signal', (data) => {
-      if (!isCleaningUpRef.current) {
-        console.log('📡 Peer signal generated:', data.type || 'ice-candidate')
+    // Attach signal listener immediately to avoid missing the initial offer
+    newPeer.on('signal', (data: any) => {
+      console.log('📡 Peer signal generated:', {
+        type: data.type || 'ice-candidate',
+        hasCandidate: !!data.candidate,
+        candidateType: (data as any).candidate?.type,
+        candidateCandidate: (data as any).candidate?.candidate?.substring(0, 50) + '...'
+      })
+      try {
+        if (onSignal) {
+          onSignal(data)
+        }
+      } catch (err) {
+        console.error('❌ Error in onSignal callback:', err)
       }
     })
 
-    newPeer.on('connect', () => {
-      if (!isCleaningUpRef.current) {
-        setIsConnected(true)
-        setConnectionState('connected')
-        retryCountRef.current = 0 // Reset retry count on successful connection
-        if (connectionTimeoutRef.current) {
-          clearTimeout(connectionTimeoutRef.current)
-          connectionTimeoutRef.current = null
-        }
-        console.log('✅ WebRTC connected successfully')
+    // If we received a remote offer/answer before creating the peer, apply it now
+    if (initialRemoteSignal) {
+      try {
+        console.log('📨 Applying initial remote signal to new peer:', initialRemoteSignal.type || 'candidate')
+        newPeer.signal(initialRemoteSignal)
+      } catch (e) {
+        console.error('❌ Failed to apply initial remote signal:', e)
       }
+    }
+
+    newPeer.on('connect', () => {
+      console.log('🎉 WebRTC peer connected!')
+      setIsConnected(true)
+      setConnectionState('connected')
+      retryCountRef.current = 0 // Reset retry count on successful connection
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current)
+        connectionTimeoutRef.current = null
+      }
+      console.log('✅ WebRTC connected successfully')
     })
 
     newPeer.on('stream', (stream) => {
-      if (!isCleaningUpRef.current) {
-        setRemoteStream(stream)
-        console.log('📺 Remote stream received:', {
-          id: stream.id,
-          tracks: stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, muted: t.muted })),
-          active: stream.active
-        })
+      setRemoteStream(stream)
+      console.log('📺 Remote stream received:', {
+        id: stream.id,
+        tracks: stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, muted: t.muted })),
+        active: stream.active
+      })
 
-        // Set up remote analyser
-        try {
-          if (audioContextRef.current) {
-            const remoteSource = audioContextRef.current.createMediaStreamSource(stream)
-            remoteAnalyserRef.current = audioContextRef.current.createAnalyser()
-            remoteAnalyserRef.current.fftSize = 256
-            remoteSource.connect(remoteAnalyserRef.current)
-          }
-        } catch (e) {
-          console.error('❌ Failed to set up remote analyser:', e)
+      // Set up remote analyser
+      try {
+        if (audioContextRef.current) {
+          const remoteSource = audioContextRef.current.createMediaStreamSource(stream)
+          remoteAnalyserRef.current = audioContextRef.current.createAnalyser()
+          remoteAnalyserRef.current.fftSize = 256
+          remoteSource.connect(remoteAnalyserRef.current)
         }
+      } catch (e) {
+        console.error('❌ Failed to set up remote analyser:', e)
       }
     })
 
     newPeer.on('close', () => {
-      if (!isCleaningUpRef.current) {
-        setIsConnected(false)
-        setRemoteStream(null)
-        setConnectionState('disconnected')
-        if (connectionTimeoutRef.current) {
-          clearTimeout(connectionTimeoutRef.current)
-          connectionTimeoutRef.current = null
-        }
-        console.log('🔌 WebRTC connection closed')
+      setIsConnected(false)
+      setRemoteStream(null)
+      setConnectionState('disconnected')
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current)
+        connectionTimeoutRef.current = null
       }
+      console.log('🔌 WebRTC connection closed')
     })
 
     newPeer.on('error', (error) => {
       console.error('❌ WebRTC error:', error)
-      if (!isCleaningUpRef.current) {
-        setConnectionState('failed')
-        if (connectionTimeoutRef.current) {
-          clearTimeout(connectionTimeoutRef.current)
-          connectionTimeoutRef.current = null
-        }
-        
-        // Auto-retry on certain errors
-        if (retryCountRef.current < maxRetries && 
-            (error.message.includes('ICE') || error.message.includes('connection'))) {
-          retryCountRef.current++
-          console.log(`🔄 Auto-retry on error (${retryCountRef.current}/${maxRetries})`)
-          setTimeout(() => {
-            if (!isCleaningUpRef.current) {
-              // The component will handle recreating the peer
-              console.log('🔄 Triggering peer recreation after error')
-            }
-          }, 2000)
-        }
+      setConnectionState('failed')
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current)
+        connectionTimeoutRef.current = null
+      }
+      
+      // Auto-retry on certain errors
+      if (retryCountRef.current < maxRetries && 
+          (error.message.includes('ICE') || error.message.includes('connection'))) {
+        retryCountRef.current++
+        console.log(`🔄 Auto-retry on error (${retryCountRef.current}/${maxRetries})`)
+        setTimeout(() => {
+          // The component will handle recreating the peer
+          console.log('🔄 Triggering peer recreation after error')
+        }, 2000)
       }
     })
 
@@ -316,8 +396,21 @@ export function useWebRTC() {
   }, [peer, connectionState])
 
   const handleWebRTCMessage = useCallback((message: WebRTCMessage) => {
-    if (!peer || isCleaningUpRef.current) {
-      console.log('⚠️ Skipping WebRTC message - no peer or cleanup in progress')
+    console.log('🔍 handleWebRTCMessage called with:', {
+      hasPeer: !!peer,
+      peerDestroyed: peer?.destroyed,
+      messageType: message.type,
+      messageData: message
+    })
+
+    if (!peer) {
+      console.log('⚠️ Skipping WebRTC message - no peer')
+      return
+    }
+
+    // Check if peer is destroyed or in an invalid state
+    if (peer.destroyed) {
+      console.log('⚠️ Skipping WebRTC message - peer is destroyed')
       return
     }
 
@@ -325,37 +418,57 @@ export function useWebRTC() {
       console.log('📨 Handling WebRTC message:', message.type)
       switch (message.type) {
         case 'offer':
+          console.log('📤 Signaling offer:', message.sdp)
           peer.signal(message.sdp)
           break
         case 'answer':
+          console.log('📤 Signaling answer:', message.sdp)
           peer.signal(message.sdp)
           break
         case 'ice-candidate':
+          // For ICE candidates, we need to pass the candidate data directly
+          // The simple-peer library expects the candidate object, not the message wrapper
+          console.log('🧊 ICE candidate received:', message.candidate)
+          console.log('🧊 ICE candidate type:', typeof message.candidate)
+          console.log('🧊 ICE candidate keys:', Object.keys(message.candidate || {}))
           peer.signal(message.candidate)
           break
       }
     } catch (error) {
       console.error('❌ Error handling WebRTC message:', error)
+      console.error('Message details:', message)
+      console.error('Peer state:', {
+        destroyed: peer.destroyed,
+        connected: peer.connected
+      })
     }
   }, [peer])
 
   const toggleMute = useCallback(() => {
-    if (localStream && !isCleaningUpRef.current) {
-      const audioTrack = localStream.getAudioTracks()[0]
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled
-        setIsMuted(!audioTrack.enabled)
-        console.log(`🔇 Mute toggled: ${!audioTrack.enabled}`)
+    try {
+      const audioTrack = localStream?.getAudioTracks()[0]
+      if (!audioTrack) return
+
+      // Toggle track enabled; this is the most compatible way to mute/unmute
+      const nextEnabled = isMuted // if muted, we want to enable; if unmuted, we want to disable
+      audioTrack.enabled = nextEnabled
+
+      // Ensure sender is still attached to the same track (helps some browsers on unmute)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pc: any = (peer as any)?._pc
+      const sender = pc?.getSenders?.().find((s: RTCRtpSender) => s.track && s.track.kind === 'audio') as RTCRtpSender | undefined
+      if (sender && sender.replaceTrack && audioTrack) {
+        sender.replaceTrack(audioTrack)
       }
+
+      setIsMuted(!nextEnabled)
+      console.log(nextEnabled ? '🔊 Unmuted (track.enabled=true)' : '🔇 Muted (track.enabled=false)')
+    } catch (error) {
+      console.error('❌ Error toggling mute:', error)
     }
-  }, [localStream])
+  }, [peer, localStream, isMuted])
 
   const cleanup = useCallback(() => {
-    if (isCleaningUpRef.current) {
-      console.log('⚠️ Cleanup already in progress, skipping')
-      return
-    }
-
     console.log('🧹 Starting WebRTC cleanup...')
     isCleaningUpRef.current = true
     
@@ -366,15 +479,15 @@ export function useWebRTC() {
     }
     
     // Clean up peer connection
-    if (peer) {
+    if (peer && !peer.destroyed) {
       try {
         console.log('🧹 Destroying peer connection')
         peer.destroy()
       } catch (error) {
         console.error('❌ Error destroying peer:', error)
       }
-      setPeer(null)
     }
+    setPeer(null)
     
     // Clean up local stream
     if (localStream) {
@@ -402,16 +515,18 @@ export function useWebRTC() {
       setRemoteStream(null)
     }
     
-    // Clean up audio context
-    if (audioContextRef.current) {
-      try {
-        console.log('🧹 Closing audio context')
-        audioContextRef.current.close()
-      } catch (error) {
-        console.error('❌ Error closing audio context:', error)
-      }
-      audioContextRef.current = null
-    }
+         // Clean up audio context
+     if (audioContextRef.current) {
+       try {
+         console.log('🧹 Closing audio context')
+         if (audioContextRef.current.state !== 'closed') {
+           audioContextRef.current.close()
+         }
+       } catch (error) {
+         console.error('❌ Error closing audio context:', error)
+       }
+       audioContextRef.current = null
+     }
     
     // Reset analysers
     analyserRef.current = null
@@ -433,6 +548,9 @@ export function useWebRTC() {
     setRemoteAudioLevel(0)
     setConnectionState('disconnected')
     retryCountRef.current = 0
+    
+    // Reset cleanup flag
+    isCleaningUpRef.current = false
     
     console.log('✅ WebRTC cleanup completed')
   }, [peer, localStream, remoteStream])
