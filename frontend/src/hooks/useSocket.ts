@@ -2,7 +2,26 @@ import { useEffect, useRef, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { User, UserFilters, WebRTCMessage, ChatMessage, ServerStats } from '@pokytalk/shared'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'
+// Dynamic backend URL detection - use same hostname as frontend
+const getBackendUrl = (): string => {
+  // If explicitly set via environment variable, use it
+  if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+    return process.env.NEXT_PUBLIC_BACKEND_URL
+  }
+  
+  // In browser, use current hostname (works for localhost, IP addresses, and domains)
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
+    // Backend runs on port 3001
+    return `${protocol}//${hostname}:3001`
+  }
+  
+  // Fallback for SSR
+  return 'http://localhost:3001'
+}
+
+const BACKEND_URL = getBackendUrl()
 
 export function useSocket() {
   const [socket, setSocket] = useState<Socket | null>(null)

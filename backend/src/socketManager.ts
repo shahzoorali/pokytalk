@@ -25,7 +25,20 @@ export class SocketManager {
         console.log(`📝 User connect request from ${socket.id}:`, data);
         
         try {
-          const user = this.userManager.createUser(socket.id, data.age, data.country);
+          // Auto-detect country from IP if not provided
+          let detectedCountry = data.country;
+          if (!detectedCountry) {
+            const clientIP = socket.handshake.address;
+            console.log(`🌍 Detecting country for IP: ${clientIP}`);
+            detectedCountry = await this.userManager.getCountryByIP(clientIP) || undefined;
+            if (detectedCountry) {
+              console.log(`✅ Detected country: ${detectedCountry} for IP: ${clientIP}`);
+            } else {
+              console.log(`⚠️ Could not detect country for IP: ${clientIP}`);
+            }
+          }
+          
+          const user = this.userManager.createUser(socket.id, data.age, detectedCountry);
           socket.data.userId = user.id;
           
           socket.emit('user:connect', user);

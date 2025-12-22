@@ -26,10 +26,32 @@ console.log('📋 Environment:', {
 const app = express();
 const server = createServer(app);
 
+// CORS origin configuration - allow localhost and local network IPs
+const isLocalNetworkOrigin = (origin: string | undefined): boolean => {
+  if (!origin) return false;
+  // Allow localhost and local network (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+  const localNetworkRegex = /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+)(:\d+)?$/;
+  return localNetworkRegex.test(origin);
+};
+
+const getCorsOrigin = () => {
+  const frontendUrl = process.env.FRONTEND_URL;
+  if (frontendUrl) {
+    return frontendUrl;
+  }
+  // Return a function that checks if origin is from local network
+  return (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    callback(null, isLocalNetworkOrigin(origin));
+  };
+};
+
+const corsOrigin = getCorsOrigin();
+console.log('🔧 Socket.io configured with CORS origin:', process.env.FRONTEND_URL || 'local network (localhost + private IPs)');
+
 // Configure Socket.io with detailed logging
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: corsOrigin,
     methods: ["GET", "POST"],
     credentials: true
   },
@@ -37,13 +59,11 @@ const io = new Server(server, {
   allowEIO3: true
 });
 
-console.log('🔧 Socket.io configured with CORS origin:', process.env.FRONTEND_URL || "http://localhost:3000");
-
 // Middleware
 app.use(helmet());
 app.use(compression());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: corsOrigin,
   credentials: true
 }));
 app.use(express.json());
@@ -85,13 +105,15 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = parseInt(process.env.PORT || '3001', 10);
+const HOST = process.env.HOST || '0.0.0.0'; // Listen on all interfaces for network access
 
-server.listen(PORT, () => {
-  console.log(`🚀 Pokytalk backend server running on port ${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`🚀 Pokytalk backend server running on ${HOST}:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
   console.log('✅ Server startup completed');
+  console.log('🌐 Accessible from network devices!');
 });
 
 // Graceful shutdown

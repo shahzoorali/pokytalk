@@ -70,6 +70,34 @@ A real-time voice chat application that connects you with random people around t
    - Frontend: http://localhost:3000
    - Backend: http://localhost:3001
 
+### Accessing from Other Devices on Your Network
+
+The application is now configured to be accessible from other devices on your local network!
+
+1. **Get your local IP address**
+   ```bash
+   npm run get-ip
+   ```
+   Or manually find it:
+   - **Windows**: Run `ipconfig` and look for IPv4 Address
+   - **Mac/Linux**: Run `ifconfig` or `ip addr` and look for your network interface
+
+2. **Start the development servers**
+   ```bash
+   npm run dev
+   ```
+
+3. **Access from other devices**
+   - On your computer: http://localhost:3000
+   - On other devices: http://YOUR_LOCAL_IP:3000
+   - Example: http://192.168.1.100:3000
+
+4. **Important Notes**
+   - Make sure all devices are on the same Wi-Fi network
+   - Windows Firewall may block connections - you may need to allow Node.js through the firewall
+   - The backend automatically allows connections from local network IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+   - If you need to specify a custom frontend URL, set the `FRONTEND_URL` environment variable in the backend
+
 ### Docker Development
 
 1. **Build and start services**
@@ -137,16 +165,39 @@ pokytalk/
 ## Environment Variables
 
 ### Backend (.env)
+Create a `.env` file in the `backend/` directory:
+
 ```env
+# Server Configuration
 PORT=3001
-FRONTEND_URL=http://localhost:3000
+HOST=0.0.0.0
+
+# Frontend URL (for CORS)
+# Leave empty to allow local network IPs automatically
+# Or set to specific URL: http://localhost:3000 or https://yourdomain.com
+FRONTEND_URL=
+
+# Node Environment
 NODE_ENV=development
+
+# Debug Mode (set to 'true' for verbose logging)
+DEBUG=false
 ```
 
 ### Frontend (.env.local)
+Create a `.env.local` file in the `frontend/` directory:
+
 ```env
-NEXT_PUBLIC_BACKEND_URL=http://localhost:3001
+# Backend URL
+# Leave empty to auto-detect based on current hostname
+# Or set to specific URL: http://localhost:3001 or https://api.yourdomain.com
+NEXT_PUBLIC_BACKEND_URL=
 ```
+
+**Note**: If `NEXT_PUBLIC_BACKEND_URL` is not set, the frontend will automatically detect the backend URL based on the current hostname. This means:
+- Accessing via `http://localhost:3000` → connects to `http://localhost:3001`
+- Accessing via `http://192.168.1.100:3000` → connects to `http://192.168.1.100:3001`
+- This makes it easy to test on multiple devices on the same network!
 
 ## API Endpoints
 

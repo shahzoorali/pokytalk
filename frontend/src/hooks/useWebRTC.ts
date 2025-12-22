@@ -250,7 +250,7 @@ export function useWebRTC() {
     const newPeer = new Peer({
       initiator,
       stream,
-      trickle: false, // Disable trickle to avoid early-offer race
+      trickle: true, // Enable trickle ICE for faster connection establishment
       config: {
         iceServers,
         iceCandidatePoolSize: 10,
