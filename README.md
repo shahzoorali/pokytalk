@@ -245,10 +245,19 @@ Returns user's country based on IP address.
 
 ### AWS Deployment
 
-1. **Set up AWS infrastructure** (EC2, ECS, or Lambda)
-2. **Configure environment variables**
-3. **Set up STUN/TURN servers** for WebRTC
-4. **Deploy using your preferred method**
+Pokytalk is configured for AWS deployment with:
+- **Frontend**: AWS Amplify (static hosting)
+- **Backend**: AWS App Runner (containerized service)
+
+See [AWS-DEPLOYMENT.md](AWS-DEPLOYMENT.md) for detailed deployment instructions.
+
+**Quick Start:**
+1. Deploy backend to AWS App Runner (uses `backend/apprunner.yaml`)
+2. Deploy frontend to AWS Amplify (uses `amplify.yml`)
+3. Configure environment variables in both services
+4. Update CORS settings with your Amplify URL
+
+**Cost**: ~$15-30/month (with free tier: $0-5/month)
 
 ## Contributing
 

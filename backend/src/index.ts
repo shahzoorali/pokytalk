@@ -26,7 +26,7 @@ console.log('📋 Environment:', {
 const app = express();
 const server = createServer(app);
 
-// CORS origin configuration - allow localhost and local network IPs
+// CORS origin configuration - allow localhost, local network IPs, and AWS Amplify domains
 const isLocalNetworkOrigin = (origin: string | undefined): boolean => {
   if (!origin) return false;
   // Allow localhost and local network (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
@@ -34,19 +34,32 @@ const isLocalNetworkOrigin = (origin: string | undefined): boolean => {
   return localNetworkRegex.test(origin);
 };
 
+const isAmplifyDomain = (origin: string | undefined): boolean => {
+  if (!origin) return false;
+  // Allow AWS Amplify domains (amplifyapp.com)
+  return /^https?:\/\/.*\.amplifyapp\.com$/.test(origin) || 
+         /^https?:\/\/.*\.amplify\.app$/.test(origin);
+};
+
 const getCorsOrigin = () => {
   const frontendUrl = process.env.FRONTEND_URL;
-  if (frontendUrl) {
-    return frontendUrl;
-  }
-  // Return a function that checks if origin is from local network
+  // Return a function that works with both Socket.io and Express CORS
   return (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    callback(null, isLocalNetworkOrigin(origin));
+    if (!origin) {
+      callback(null, false);
+      return;
+    }
+    // Allow if it matches frontend URL, local network, or Amplify domain
+    const allowed = 
+      (frontendUrl && origin === frontendUrl) ||
+      isLocalNetworkOrigin(origin) || 
+      isAmplifyDomain(origin);
+    callback(null, allowed);
   };
 };
 
 const corsOrigin = getCorsOrigin();
-console.log('🔧 Socket.io configured with CORS origin:', process.env.FRONTEND_URL || 'local network (localhost + private IPs)');
+console.log('🔧 Socket.io configured with CORS origin:', process.env.FRONTEND_URL || 'local network + AWS Amplify domains');
 
 // Configure Socket.io with detailed logging
 const io = new Server(server, {
