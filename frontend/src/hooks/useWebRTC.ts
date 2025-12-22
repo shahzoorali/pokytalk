@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import Peer from 'simple-peer'
-import { WebRTCMessage } from '@pokytalk/shared'
+import { WebRTCMessage } from '@/types'
 
 export function useWebRTC() {
   const [peer, setPeer] = useState<Peer.Instance | null>(null)

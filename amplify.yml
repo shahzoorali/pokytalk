@@ -3,14 +3,10 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "Installing root dependencies..."
-        - npm install
-        - echo "Building shared package..."
-        - cd shared && npm install && npm run build && cd ..
+        - cd frontend && npm install
     build:
       commands:
-        - echo "Building frontend..."
-        - cd frontend && npm install && npm run build
+        - cd frontend && npm run build
   artifacts:
     baseDirectory: frontend/out
     files:
@@ -18,5 +14,3 @@ frontend:
   cache:
     paths:
       - frontend/node_modules/**/*
-      - shared/node_modules/**/*
-      - node_modules/**/*

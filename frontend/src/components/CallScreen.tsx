@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Phone, Mic, MicOff, MessageSquare, X, Send } from 'lucide-react'
-import { User, ChatMessage } from '@pokytalk/shared'
+import { User, ChatMessage } from '@/types'
 import { formatTime } from '@/lib/utils'
 import { AudioLevelBar } from './AudioLevelBar'
 

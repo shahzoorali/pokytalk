@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
-import { User, UserFilters, WebRTCMessage, ChatMessage, ServerStats } from '@pokytalk/shared'
+import { User, UserFilters, WebRTCMessage, ChatMessage, ServerStats } from '@/types'
 
 // Dynamic backend URL detection - use same hostname as frontend
 const getBackendUrl = (): string => {
