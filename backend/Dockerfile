@@ -2,28 +2,30 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY backend/package*.json ./
-COPY backend/tsconfig.json ./
+# Copy root package.json for workspace setup
+COPY package.json ./
 
-# Copy shared package
+# Copy and build shared package first
 COPY shared ./shared
-
-# Install dependencies (including dev deps for build)
-RUN npm install
-
-# Build shared package first
 WORKDIR /app/shared
 RUN npm install && npm run build
 WORKDIR /app
 
-# Copy source code
+# Copy backend package files
+COPY backend/package*.json ./backend/
+COPY backend/tsconfig.json ./backend/
+
+# Install backend dependencies
+WORKDIR /app/backend
+RUN npm install
+
+# Install shared package as local dependency so Node.js can resolve @pokytalk/shared
+RUN npm install ../shared
+
+# Copy backend source code
 COPY backend/src ./src
 
-# Update tsconfig paths for Docker build
-RUN sed -i 's|"../shared/src"|"./shared/src"|g' tsconfig.json
-
-# Build the application
+# Build backend (TypeScript will resolve @pokytalk/shared from node_modules)
 RUN npm run build
 
 # Expose port
@@ -31,7 +33,8 @@ EXPOSE 3001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3001/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3001/health || exit 1
 
-# Start the application
-CMD ["npm", "start"]
+# Start the application from backend directory
+WORKDIR /app/backend
+CMD ["node", "dist/index.js"]

@@ -5,11 +5,9 @@ build:
     build:
       - npm install
       - cd shared && npm install && npm run build && cd ..
-      - cd backend && npm install && npm run build
-      - mkdir -p backend/node_modules/@pokytalk
-      - cp -r shared backend/node_modules/@pokytalk/shared
+      - cd backend && npm install && npm install ../shared && npm run build
 run:
-  command: cd backend && node dist/index.js
+  command: sh -c "cd backend && node dist/index.js"
   network:
     port: 3001
     env: PORT
