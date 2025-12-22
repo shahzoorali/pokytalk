@@ -6,7 +6,8 @@ build:
       - npm install
       - cd shared && npm install && npm run build && cd ..
       - cd backend && npm install && npm run build
-      - cd backend && npm install ../shared
+      - mkdir -p backend/node_modules/@pokytalk
+      - cp -r shared backend/node_modules/@pokytalk/shared
 run:
   command: cd backend && node dist/index.js
   network:
