@@ -40,4 +40,16 @@
   .audio-level-fill {
     @apply bg-primary-500 h-full transition-all duration-100 ease-out;
   }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-gray-700/50 rounded-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-primary-500/50 rounded-full hover:bg-primary-500/70;
+  }
 }
