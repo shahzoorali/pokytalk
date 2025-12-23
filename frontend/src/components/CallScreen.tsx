@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Phone, Mic, MicOff, MessageSquare, X, Send } from 'lucide-react'
 import { User, ChatMessage } from '@/types'
-import { formatTime } from '@/lib/utils'
 import { AudioLevelBar } from './AudioLevelBar'
 
 interface CallScreenProps {
@@ -38,7 +37,6 @@ export function CallScreen({
   remoteStream,
 }: CallScreenProps) {
   const [messageInput, setMessageInput] = useState('')
-  const [callStartTime] = useState(new Date())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const remoteAudioRef = useRef<HTMLAudioElement>(null)
 
@@ -72,205 +70,138 @@ export function CallScreen({
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 flex">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <audio ref={remoteAudioRef} autoPlay playsInline />
-      <div className={`flex-1 flex flex-col ${showChat ? 'hidden md:flex' : 'flex'}`}>
-        <div className="bg-gray-800 p-4 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className={`w-3 h-3 ${
-              connectionState === 'connected' ? 'bg-green-500' : 
-              connectionState === 'connecting' ? 'bg-yellow-500' : 
+      <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh]">
+        {/* Header */}
+        <div className="bg-gray-700/50 p-4 flex items-center justify-between rounded-t-xl">
+          <div className="flex items-center space-x-2">
+            <div className={`w-2 h-2 ${
+              connectionState === 'connected' ? 'bg-green-500' :
+              connectionState === 'connecting' ? 'bg-yellow-500' :
               connectionState === 'failed' ? 'bg-red-500' : 'bg-gray-500'
             } rounded-full animate-pulse`}></div>
-            <span className="text-white font-medium">
-              {connectionState === 'connected' ? 'Connected' : 
-               connectionState === 'connecting' ? 'Connecting...' : 
+            <span className="text-white text-sm">
+              {connectionState === 'connected' ? 'Connected' :
+               connectionState === 'connecting' ? 'Connecting...' :
                connectionState === 'failed' ? 'Connection Failed' : 'Disconnected'}
             </span>
-            {connectionState === 'failed' && (
-              <span className="text-red-400 text-xs ml-2">Check your network</span>
-            )}
           </div>
-          <div className="text-gray-400 text-sm">
-            {formatTime(callStartTime)}
-          </div>
+          <button
+            onClick={onEndCall}
+            className="p-2 hover:bg-gray-600 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8">
-          <div className="text-center space-y-4">
-            <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto">
-              <Phone className="w-12 h-12 text-gray-400" />
+        {/* Main call content */}
+        <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-6 min-h-[300px]">
+          <div className="text-center space-y-2">
+            <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto">
+              <Phone className="w-8 h-8 text-gray-400" />
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white">Connected</h2>
-              <p className="text-gray-400">You're talking with someone</p>
-            </div>
+            <h2 className="text-lg font-bold text-white">Connected</h2>
           </div>
 
-          <div className="w-full max-w-md space-y-6">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
+          <div className="w-full max-w-sm space-y-4">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-400">You</span>
-                <div className="flex items-center space-x-2">
-                  {isMuted && <MicOff className="w-4 h-4 text-red-500" />}
-                  <span className="text-gray-400">
-                    {Math.round(localAudioLevel * 100)}%
-                  </span>
-                </div>
+                {isMuted && <MicOff className="w-3 h-3 text-red-500" />}
               </div>
               <AudioLevelBar level={isMuted ? 0 : localAudioLevel} />
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-400">Partner</span>
-                <span className="text-gray-400">
-                  {Math.round(remoteAudioLevel * 100)}%
-                </span>
               </div>
               <AudioLevelBar level={remoteAudioLevel} />
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
             <button
               onClick={onToggleMute}
-              className={`p-4 rounded-full transition-colors ${
+              className={`p-3 rounded-full transition-colors ${
                 isMuted
                   ? 'bg-red-600 hover:bg-red-700 text-white'
                   : 'bg-gray-700 hover:bg-gray-600 text-white'
               }`}
             >
-              {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+              {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
 
             <button
               onClick={onEndCall}
-              className="p-4 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors"
+              className="p-3 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
             </button>
 
-            {/* Chat toggle on mobile and desktop */}
             <button
               onClick={onToggleChat}
-              className="p-4 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+              className="p-3 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors"
             >
-              <MessageSquare className="w-6 h-6" />
+              <MessageSquare className="w-5 h-5" />
             </button>
           </div>
         </div>
+
+        {/* Chat panel */}
+        {showChat && (
+          <div className="border-t border-gray-700 flex flex-col max-h-64">
+            <div className="p-3 border-b border-gray-700 flex items-center justify-between">
+              <h3 className="text-white text-sm font-medium">Chat</h3>
+              <button onClick={onToggleChat} className="text-gray-300 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+              {messages.map((message, index) => (
+                <div
+                  key={index}
+                  className={`flex ${message.senderId === partner.id ? 'justify-start' : 'justify-end'}`}
+                >
+                  <div
+                    className={`max-w-xs px-3 py-2 rounded-lg ${
+                      message.senderId === partner.id
+                        ? 'bg-gray-700 text-white'
+                        : 'bg-primary-600 text-white'
+                    }`}
+                  >
+                    <p className="text-sm">{message.content}</p>
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            <div className="p-3 border-t border-gray-700">
+              <div className="flex space-x-2">
+                <textarea
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Type a message..."
+                  className="flex-1 bg-gray-700 text-white rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  rows={1}
+                  maxLength={3000}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!messageInput.trim()}
+                  className="bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 text-white p-2 rounded-lg transition-colors"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-
-      {showChat && (
-        <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col md:hidden">
-          <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-            <h3 className="text-white font-medium">Chat</h3>
-            <button onClick={onToggleChat} className="text-gray-300 hover:text-white">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`flex ${message.senderId === partner.id ? 'justify-start' : 'justify-end'}`}
-              >
-                <div
-                  className={`max-w-xs px-3 py-2 rounded-lg ${
-                    message.senderId === partner.id
-                      ? 'bg-gray-700 text-white'
-                      : 'bg-blue-600 text-white'
-                  }`}
-                >
-                  <p className="text-sm">{message.content}</p>
-                  <p className="text-xs opacity-70 mt-1">
-                    {new Date(message.timestamp).toLocaleTimeString()}
-                  </p>
-                </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-
-          <div className="p-4 border-t border-gray-700">
-            <div className="flex space-x-2">
-              <textarea
-                value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Type a message..."
-                className="flex-1 bg-gray-700 text-white rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={1}
-                maxLength={3000}
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!messageInput.trim()}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white p-2 rounded-lg transition-colors"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showChat && (
-        <div className="hidden md:block w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
-          <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-            <h3 className="text-white font-medium">Chat</h3>
-            <button onClick={onToggleChat} className="text-gray-300 hover:text-white">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`flex ${message.senderId === partner.id ? 'justify-start' : 'justify-end'}`}
-              >
-                <div
-                  className={`max-w-xs px-3 py-2 rounded-lg ${
-                    message.senderId === partner.id
-                      ? 'bg-gray-700 text-white'
-                      : 'bg-blue-600 text-white'
-                  }`}
-                >
-                  <p className="text-sm">{message.content}</p>
-                  <p className="text-xs opacity-70 mt-1">
-                    {new Date(message.timestamp).toLocaleTimeString()}
-                  </p>
-                </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-
-          <div className="p-4 border-t border-gray-700">
-            <div className="flex space-x-2">
-              <textarea
-                value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Type a message..."
-                className="flex-1 bg-gray-700 text-white rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={1}
-                maxLength={3000}
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!messageInput.trim()}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white p-2 rounded-lg transition-colors"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

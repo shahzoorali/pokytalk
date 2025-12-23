@@ -12,6 +12,7 @@ export function VoiceChatApp() {
   const [isInitialized, setIsInitialized] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState<UserFilters>({})
+  const [isLoading, setIsLoading] = useState(false)
   const isUnmountingRef = useRef(false)
   const callInProgressRef = useRef(false)
   const peerSessionRef = useRef<string | null>(null)
@@ -227,6 +228,7 @@ export function VoiceChatApp() {
     if (isUnmountingRef.current) return
     
     try {
+      setIsLoading(true)
       console.log('🚀 Starting call...')
       await initializeAudio()
       setIsInitialized(true)
@@ -235,6 +237,8 @@ export function VoiceChatApp() {
     } catch (error) {
       console.error('Failed to start call:', error)
       alert('Failed to access microphone. Please check permissions.')
+      setIsInitialized(false)
+      setIsLoading(false)
     }
   }, [initializeAudio, requestCall])
 
@@ -247,6 +251,7 @@ export function VoiceChatApp() {
     endCall()
     cleanupWebRTC()
     setIsInitialized(false)
+    setIsLoading(false)
     setShowFilters(false)
   }, [endCall, cleanupWebRTC])
 
@@ -266,26 +271,40 @@ export function VoiceChatApp() {
     }
   }, [showFilters, sessionId, requestChatHistory])
 
-  if (!isConnected) {
-    return <LoadingScreen message="Connecting to server..." />
-  }
+  // Single page experience - show everything on one screen
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse-slow [animation-delay:1s]"></div>
+      </div>
 
-  if (!isInitialized) {
-    return (
+      {/* Main content - always show connection screen */}
       <ConnectionScreen
         onStartCall={handleStartCall}
         stats={stats}
+        isConnected={isConnected}
+        isInitialized={isInitialized}
+        isWaiting={isWaiting}
+        isLoading={isLoading}
       />
-    )
-  }
 
-  if (isWaiting) {
-    return <LoadingScreen message="Finding someone to talk to..." />
-  }
+      {/* Overlay for waiting state */}
+      {isWaiting && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700">
+            <div className="flex flex-col items-center space-y-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent"></div>
+              <p className="text-white text-lg font-medium">Finding someone to talk to...</p>
+            </div>
+          </div>
+        </div>
+      )}
 
-  if (partner && sessionId) {
-    return (
-              <CallScreen
+      {/* Call interface overlay - appears on top when connected */}
+      {partner && sessionId && (
+        <CallScreen
           partner={partner}
           isWebRTCConnected={isWebRTCConnected}
           connectionState={connectionState}
@@ -300,14 +319,14 @@ export function VoiceChatApp() {
           onSendMessage={sendMessage}
           remoteStream={remoteStream}
         />
-    )
-  }
+      )}
 
-  // If we're initialized but not in a call, show connection screen
-  return (
-    <ConnectionScreen
-      onStartCall={handleStartCall}
-      stats={stats}
-    />
+      {/* Connection status indicator */}
+      {!isConnected && (
+        <div className="fixed top-4 right-4 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg z-50">
+          <p className="text-sm">Connecting to server...</p>
+        </div>
+      )}
+    </div>
   )
 }
