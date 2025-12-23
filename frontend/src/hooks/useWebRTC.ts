@@ -426,12 +426,15 @@ export function useWebRTC() {
           peer.signal(message.sdp)
           break
         case 'ice-candidate':
-          // For ICE candidates, we need to pass the candidate data directly
-          // The simple-peer library expects the candidate object, not the message wrapper
-          console.log('🧊 ICE candidate received:', message.candidate)
-          console.log('🧊 ICE candidate type:', typeof message.candidate)
-          console.log('🧊 ICE candidate keys:', Object.keys(message.candidate || {}))
-          peer.signal(message.candidate)
+          // For ICE candidates, simple-peer expects { candidate: {...} } format
+          // We receive { candidate, sdpMLineIndex, sdpMid } and need to wrap it
+          const candidateData = message.candidate
+          if (candidateData) {
+            // Wrap in the format simple-peer expects
+            const signalData = { candidate: candidateData }
+            console.log('🧊 Signaling ICE candidate')
+            peer.signal(signalData)
+          }
           break
       }
     } catch (error) {
