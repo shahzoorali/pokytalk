@@ -3,18 +3,10 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "Starting preBuild phase"
-        - echo "Current directory: $(pwd)"
-        - echo "Checking for frontend directory..."
-        - test -d frontend && echo "Frontend directory exists" || (echo "Frontend directory NOT found" && ls -la && exit 1)
-        - cd frontend && echo "Changed to frontend directory: $(pwd)" && npm install
+        - npm install --prefix frontend
     build:
       commands:
-        - echo "Starting build phase"
-        - echo "Current directory: $(pwd)"
-        - echo "Checking for frontend directory..."
-        - test -d frontend && echo "Frontend directory exists" || (echo "Frontend directory NOT found" && ls -la && exit 1)
-        - cd frontend && echo "Changed to frontend directory: $(pwd)" && npm run build
+        - npm run build --prefix frontend
   artifacts:
     baseDirectory: frontend/out
     files:
