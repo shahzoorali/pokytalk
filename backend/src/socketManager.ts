@@ -28,13 +28,25 @@ export class SocketManager {
           // Auto-detect country from IP if not provided
           let detectedCountry = data.country;
           if (!detectedCountry) {
-            const clientIP = socket.handshake.address || socket.request.headers['x-forwarded-for'] || socket.request.socket.remoteAddress;
-            console.log(`🌍 Detecting country for IP: ${clientIP}`);
-            detectedCountry = await this.userManager.getCountryByIP(clientIP) || undefined;
-            if (detectedCountry) {
-              console.log(`✅ Detected country: ${detectedCountry} for IP: ${clientIP}`);
-            } else {
-              console.log(`⚠️ Could not detect country for IP: ${clientIP} - this may be a local/private IP`);
+            // Get IP from multiple sources, handling arrays and undefined
+            let clientIP: string | undefined;
+            if (socket.handshake.address) {
+              clientIP = socket.handshake.address;
+            } else if (socket.request.headers['x-forwarded-for']) {
+              const forwardedFor = socket.request.headers['x-forwarded-for'];
+              clientIP = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+            } else if (socket.request.socket.remoteAddress) {
+              clientIP = socket.request.socket.remoteAddress;
+            }
+            
+            if (clientIP) {
+              console.log(`🌍 Detecting country for IP: ${clientIP}`);
+              detectedCountry = await this.userManager.getCountryByIP(clientIP) || undefined;
+              if (detectedCountry) {
+                console.log(`✅ Detected country: ${detectedCountry} for IP: ${clientIP}`);
+              } else {
+                console.log(`⚠️ Could not detect country for IP: ${clientIP} - this may be a local/private IP`);
+              }
             }
           }
           

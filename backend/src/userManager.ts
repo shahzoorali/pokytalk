@@ -105,11 +105,8 @@ export class UserManager {
 
   async getCountryByIP(ip: string): Promise<string | null> {
     try {
-      // Handle array of IPs (from x-forwarded-for header)
-      let cleanIP = Array.isArray(ip) ? ip[0] : ip;
-      
       // Remove IPv6 prefix if present
-      cleanIP = cleanIP.replace(/^::ffff:/, '');
+      let cleanIP = ip.replace(/^::ffff:/, '');
       
       // Skip localhost and private IPs
       if (cleanIP === '127.0.0.1' || cleanIP === 'localhost' || 
