@@ -32,18 +32,10 @@ export function generateYears(): number[] {
 }
 
 export function getCountryName(countryCode: string): string {
-  const countries: Record<string, string> = {
-    'US': 'United States',
-    'CA': 'Canada',
-    'GB': 'United Kingdom',
-    'AU': 'Australia',
-    'DE': 'Germany',
-    'FR': 'France',
-    'JP': 'Japan',
-    'IN': 'India',
-    'BR': 'Brazil',
-    'MX': 'Mexico',
-    // Add more countries as needed
-  }
-  return countries[countryCode] || countryCode
+  if (!countryCode) return ''
+  
+  // Import COUNTRIES dynamically to avoid circular dependency
+  const { COUNTRIES } = require('./countries')
+  const country = COUNTRIES.find((c: { code: string }) => c.code === countryCode)
+  return country ? country.name : countryCode
 }

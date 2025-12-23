@@ -4,8 +4,6 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSocket } from '@/hooks/useSocket'
 import { useWebRTC } from '@/hooks/useWebRTC'
 import { ConnectionScreen } from './ConnectionScreen'
-import { CallScreen } from './CallScreen'
-import { LoadingScreen } from './LoadingScreen'
 import { UserFilters } from '@/types'
 
 export function VoiceChatApp() {
@@ -280,7 +278,7 @@ export function VoiceChatApp() {
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse-slow [animation-delay:1s]"></div>
       </div>
 
-      {/* Main content - always show connection screen */}
+      {/* Main content - always show connection screen with inline call controls */}
       <ConnectionScreen
         onStartCall={handleStartCall}
         stats={stats}
@@ -288,38 +286,22 @@ export function VoiceChatApp() {
         isInitialized={isInitialized}
         isWaiting={isWaiting}
         isLoading={isLoading}
+        // Call state props
+        partner={partner}
+        sessionId={sessionId}
+        isWebRTCConnected={isWebRTCConnected}
+        connectionState={connectionState}
+        isMuted={isMuted}
+        localAudioLevel={localAudioLevel}
+        remoteAudioLevel={remoteAudioLevel}
+        messages={messages}
+        showChat={showFilters}
+        onEndCall={handleEndCall}
+        onToggleMute={handleToggleMute}
+        onToggleChat={handleToggleChat}
+        onSendMessage={sendMessage}
+        remoteStream={remoteStream}
       />
-
-      {/* Overlay for waiting state */}
-      {isWaiting && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700">
-            <div className="flex flex-col items-center space-y-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent"></div>
-              <p className="text-white text-lg font-medium">Finding someone to talk to...</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Call interface overlay - appears on top when connected */}
-      {partner && sessionId && (
-        <CallScreen
-          partner={partner}
-          isWebRTCConnected={isWebRTCConnected}
-          connectionState={connectionState}
-          isMuted={isMuted}
-          localAudioLevel={localAudioLevel}
-          remoteAudioLevel={remoteAudioLevel}
-          messages={messages}
-          showChat={showFilters}
-          onEndCall={handleEndCall}
-          onToggleMute={handleToggleMute}
-          onToggleChat={handleToggleChat}
-          onSendMessage={sendMessage}
-          remoteStream={remoteStream}
-        />
-      )}
 
       {/* Connection status indicator */}
       {!isConnected && (

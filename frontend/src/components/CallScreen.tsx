@@ -77,13 +77,13 @@ export function CallScreen({
         <div className="bg-gray-700/50 p-4 flex items-center justify-between rounded-t-xl">
           <div className="flex items-center space-x-2">
             <div className={`w-2 h-2 ${
-              connectionState === 'connected' ? 'bg-green-500' :
-              connectionState === 'connecting' ? 'bg-yellow-500' :
+              connectionState === 'connected' ? 'bg-green-500' : 
+              connectionState === 'connecting' ? 'bg-yellow-500' : 
               connectionState === 'failed' ? 'bg-red-500' : 'bg-gray-500'
             } rounded-full animate-pulse`}></div>
             <span className="text-white text-sm">
-              {connectionState === 'connected' ? 'Connected' :
-               connectionState === 'connecting' ? 'Connecting...' :
+              {connectionState === 'connected' ? 'Connected' : 
+               connectionState === 'connecting' ? 'Connecting...' : 
                connectionState === 'failed' ? 'Connection Failed' : 'Disconnected'}
             </span>
           </div>
@@ -146,61 +146,61 @@ export function CallScreen({
             >
               <MessageSquare className="w-5 h-5" />
             </button>
-          </div>
         </div>
+      </div>
 
         {/* Chat panel */}
-        {showChat && (
+      {showChat && (
           <div className="border-t border-gray-700 flex flex-col max-h-64">
             <div className="p-3 border-b border-gray-700 flex items-center justify-between">
               <h3 className="text-white text-sm font-medium">Chat</h3>
-              <button onClick={onToggleChat} className="text-gray-300 hover:text-white">
+            <button onClick={onToggleChat} className="text-gray-300 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
             
             <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-              {messages.map((message, index) => (
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className={`flex ${message.senderId === partner.id ? 'justify-start' : 'justify-end'}`}
+              >
                 <div
-                  key={index}
-                  className={`flex ${message.senderId === partner.id ? 'justify-start' : 'justify-end'}`}
-                >
-                  <div
-                    className={`max-w-xs px-3 py-2 rounded-lg ${
-                      message.senderId === partner.id
-                        ? 'bg-gray-700 text-white'
+                  className={`max-w-xs px-3 py-2 rounded-lg ${
+                    message.senderId === partner.id
+                      ? 'bg-gray-700 text-white'
                         : 'bg-primary-600 text-white'
-                    }`}
-                  >
-                    <p className="text-sm">{message.content}</p>
-                  </div>
+                  }`}
+                >
+                  <p className="text-sm">{message.content}</p>
                 </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
 
             <div className="p-3 border-t border-gray-700">
-              <div className="flex space-x-2">
-                <textarea
-                  value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Type a message..."
+            <div className="flex space-x-2">
+              <textarea
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Type a message..."
                   className="flex-1 bg-gray-700 text-white rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  rows={1}
-                  maxLength={3000}
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!messageInput.trim()}
+                rows={1}
+                maxLength={3000}
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!messageInput.trim()}
                   className="bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 text-white p-2 rounded-lg transition-colors"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
+              >
+                <Send className="w-4 h-4" />
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
       </div>
     </div>
   )

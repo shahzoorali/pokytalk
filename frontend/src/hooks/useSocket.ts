@@ -13,7 +13,18 @@ const getBackendUrl = (): string => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
-    // Backend runs on port 3001
+    
+    // Custom domain mapping: pokytalk.com -> app.pokytalk.com
+    if (hostname === 'pokytalk.com' || hostname === 'www.pokytalk.com') {
+      return `${protocol}//app.pokytalk.com`
+    }
+    
+    // For app.pokytalk.com, use same domain
+    if (hostname === 'app.pokytalk.com') {
+      return `${protocol}//app.pokytalk.com`
+    }
+    
+    // For localhost or other domains, use same hostname with port 3001
     return `${protocol}//${hostname}:3001`
   }
   
