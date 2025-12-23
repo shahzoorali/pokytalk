@@ -44,7 +44,7 @@ export default function RootLayout({
             `,
           }}
         />
-        {/* Google Analytics */}
+        {/* Google tag (gtag.js) */}
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-HJ73DZCXCR"
           strategy="afterInteractive"
@@ -57,9 +57,7 @@ export default function RootLayout({
               window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
               gtag('js', new Date());
-              gtag('config', 'G-HJ73DZCXCR', {
-                'anonymize_ip': true
-              });
+              gtag('config', 'G-HJ73DZCXCR');
             `,
           }}
         />
