@@ -36,24 +36,28 @@ const isLocalNetworkOrigin = (origin: string | undefined): boolean => {
 
 const isAmplifyDomain = (origin: string | undefined): boolean => {
   if (!origin) return false;
-  // Allow AWS Amplify domains (amplifyapp.com)
+  // Allow AWS Amplify domains (amplifyapp.com) and App Runner domains
   return /^https?:\/\/.*\.amplifyapp\.com$/.test(origin) || 
-         /^https?:\/\/.*\.amplify\.app$/.test(origin);
+         /^https?:\/\/.*\.amplify\.app$/.test(origin) ||
+         /^https?:\/\/.*\.awsapprunner\.com$/.test(origin);
 };
 
 const getCorsOrigin = () => {
   const frontendUrl = process.env.FRONTEND_URL;
   // Return a function that works with both Socket.io and Express CORS
   return (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) {
-      callback(null, false);
+      callback(null, true);
       return;
     }
-    // Allow if it matches frontend URL, local network, or Amplify domain
+    // Allow if it matches frontend URL, local network, or Amplify/AppRunner domain
     const allowed = 
       (frontendUrl && origin === frontendUrl) ||
       isLocalNetworkOrigin(origin) || 
       isAmplifyDomain(origin);
+    
+    console.log(`🔍 CORS check for origin: ${origin} - ${allowed ? 'ALLOWED' : 'BLOCKED'}`);
     callback(null, allowed);
   };
 };
@@ -68,16 +72,27 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ['websocket', 'polling'],
-  allowEIO3: true
+  transports: ['polling', 'websocket'],  // Polling first for better compatibility
+  allowEIO3: true,
+  pingTimeout: 60000,  // 60 seconds
+  pingInterval: 25000,  // 25 seconds - keeps connection alive through load balancers
+  upgradeTimeout: 30000,  // 30 seconds for upgrade
+  maxHttpBufferSize: 1e6,  // 1MB
 });
 
 // Middleware
-app.use(helmet());
+// Configure helmet with relaxed settings for WebSocket support
+app.use(helmet({
+  contentSecurityPolicy: false,  // Disable CSP for WebSocket compatibility
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: false,
+}));
 app.use(compression());
 app.use(cors({
   origin: corsOrigin,
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
 app.use(express.json());
 
@@ -90,6 +105,15 @@ const callManager = new CallManager();
 const statsManager = new StatsManager();
 const socketManager = new SocketManager(io, userManager, callManager, statsManager);
 console.log('✅ Managers initialized');
+
+// Root route for basic connectivity check
+app.get('/', (req, res) => {
+  res.json({ 
+    service: 'pokytalk-backend',
+    status: 'running',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {

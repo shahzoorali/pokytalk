@@ -36,8 +36,9 @@ export function useSocket() {
   useEffect(() => {
     console.log('Attempting to connect to:', BACKEND_URL)
     const newSocket = io(BACKEND_URL, {
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],  // Try polling first, then upgrade to websocket
       autoConnect: true,
+      withCredentials: true,
     })
 
     newSocket.on('connect', () => {
