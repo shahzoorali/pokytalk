@@ -61,18 +61,15 @@ export function VoiceChatApp() {
   // Handle WebRTC signaling - simplified with trickle ICE enabled
   const handleWebRTCMessageCallback = useCallback((message: any) => {
     if (isUnmountingRef.current) return
-    console.log('📨 Received WebRTC message:', {
-      type: message.type,
-      from: message.from,
-      to: message.to,
-      hasPeer: !!peer,
-      peerDestroyed: peer?.destroyed
-    })
+    
+    // Only log non-ICE messages to reduce spam
+    if (message.type !== 'ice-candidate') {
+      console.log('📨 Received WebRTC message:', message.type)
+    }
 
     // Simply forward the message to the peer handler
-    // Peer creation is handled in the main effect below
     handleWebRTCMessage(message)
-  }, [peer, handleWebRTCMessage])
+  }, [handleWebRTCMessage])
 
   useEffect(() => {
     if (socket && !isUnmountingRef.current) {
@@ -94,11 +91,9 @@ export function VoiceChatApp() {
   useEffect(() => {
     if (partner && sessionId) {
       callInProgressRef.current = true
-      console.log('📞 Call in progress - preventing cleanup')
     } else if (!isWaiting) {
       callInProgressRef.current = false
-      peerSessionRef.current = null
-      console.log('📞 No call in progress')
+      // Don't reset peerSessionRef here - let the cleanup effect handle it
     }
   }, [partner?.id, sessionId, isWaiting])
 
@@ -107,30 +102,17 @@ export function VoiceChatApp() {
     const uid = user?.id
     const pid = partner?.id
     
-    console.log('🔍 Peer creation check:', {
-      uid,
-      pid,
-      sessionId,
-      hasLocalStream: !!localStream,
-      hasPeer: !!peer,
-      peerSession: peerSessionRef.current,
-      connectionState
-    })
+    // Skip if already created for this session (check FIRST to avoid log spam)
+    if (peerSessionRef.current === sessionId && sessionId) {
+      return
+    }
     
+    // Skip if missing required data
     if (!uid || !pid || !sessionId || !localStream) {
-      if (uid && pid && sessionId) {
-        console.log('⏳ Waiting for local stream before creating peer')
-      }
       return
     }
     
     if (isUnmountingRef.current) return
-
-    // Only create once per session
-    if (peerSessionRef.current === sessionId) {
-      console.log('⏭️ Peer already created for this session')
-      return
-    }
 
     // Determine initiator - prefer server-declared initiator
     const serverInitiatorId: string | undefined = (socket as any)?.__webrtcInitiatorId
@@ -138,10 +120,14 @@ export function VoiceChatApp() {
     
     console.log('🎯 Creating WebRTC peer:', {
       isInitiator,
-      initiatorId: isInitiator ? uid : pid,
-      localStreamId: localStream.id,
-      streamActive: localStream.active
+      uid,
+      pid,
+      sessionId,
+      localStreamId: localStream.id
     })
+    
+    // Mark session BEFORE creating peer to prevent race conditions
+    peerSessionRef.current = sessionId
     
     const newPeer = createPeer(isInitiator, localStream, (data: any) => {
       if (isUnmountingRef.current) return
@@ -163,81 +149,79 @@ export function VoiceChatApp() {
     })
     
     if (newPeer) {
-      peerSessionRef.current = sessionId
-      console.log('✅ Peer created and session tracked')
+      console.log('✅ Peer created successfully')
     } else {
       console.error('❌ Peer creation returned null')
+      peerSessionRef.current = null  // Reset on failure
     }
-  }, [user?.id, partner?.id, sessionId, localStream, peer, connectionState, createPeer, sendWebRTCMessage, socket])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, partner?.id, sessionId, localStream])
 
   // Handle connection state changes and retry logic
+  const retryAttemptRef = useRef(0)
+  const maxRetries = 3
+  
   useEffect(() => {
-    if (connectionState === 'failed' && partner && sessionId && localStream) {
-      console.log('🔄 Connection failed, attempting retry...')
-      const retryTimeout = setTimeout(() => {
-        if (!isUnmountingRef.current && connectionState === 'failed') {
-          console.log('🔄 Retrying WebRTC connection...')
-          peerSessionRef.current = null // Reset session to allow recreation
-          cleanupWebRTC()
-          
-          // Recreate peer after cleanup
-          setTimeout(() => {
-            if (!isUnmountingRef.current && partner && sessionId && localStream) {
-              const uid = user?.id
-              const pid = partner?.id
-              if (uid && pid) {
-                const isInitiator = uid < pid
-                const newPeer = createPeer(isInitiator, localStream)
-                if (newPeer) {
-                  peerSessionRef.current = sessionId
-                  newPeer.on('signal', (data: any) => {
-                    if (isUnmountingRef.current) return
-                    console.log('📡 WebRTC signal generated (retry):', data.type || 'candidate')
-                    if (data.type === 'offer' || data.type === 'answer') {
-                      sendWebRTCMessage({ type: data.type, sdp: data, from: uid, to: pid })
-                    } else if (data.candidate) {
-                      // Format the candidate data properly for simple-peer
-                      console.log('🧊 Sending ICE candidate (retry):', data.candidate)
-                      const candidateData = {
-                        candidate: data.candidate.candidate,
-                        sdpMLineIndex: data.candidate.sdpMLineIndex,
-                        sdpMid: data.candidate.sdpMid
-                      }
-                      sendWebRTCMessage({ type: 'ice-candidate', candidate: candidateData, from: uid, to: pid })
-                    }
-                  })
-                }
-              }
-            }
-          }, 1000)
-        }
-      }, 3000) // Wait 3 seconds before retrying
-
-      return () => clearTimeout(retryTimeout)
+    if (connectionState !== 'failed') {
+      // Reset retry count on successful connection or other states
+      if (connectionState === 'connected') {
+        retryAttemptRef.current = 0
+      }
+      return
     }
-  }, [connectionState, partner, sessionId, localStream, user?.id, createPeer, sendWebRTCMessage, cleanupWebRTC])
+    
+    if (!partner || !sessionId || !localStream) return
+    if (retryAttemptRef.current >= maxRetries) {
+      console.log('❌ Max retry attempts reached')
+      return
+    }
+    
+    console.log(`🔄 Connection failed, retry attempt ${retryAttemptRef.current + 1}/${maxRetries}...`)
+    retryAttemptRef.current++
+    
+    const retryTimeout = setTimeout(() => {
+      if (isUnmountingRef.current) return
+      
+      console.log('🔄 Retrying WebRTC connection...')
+      peerSessionRef.current = null // Reset session to allow recreation
+      cleanupWebRTC()
+    }, 3000)
 
-  // Handle call ending
+    return () => clearTimeout(retryTimeout)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectionState])
+
+  // Handle call ending - cleanup when partner disconnects
+  const hadPartnerRef = useRef(false)
   useEffect(() => {
-    if (!partner && peer && !isUnmountingRef.current) {
-      console.log('📞 Partner disconnected, cleaning up WebRTC...')
+    if (partner) {
+      hadPartnerRef.current = true
+    } else if (hadPartnerRef.current && !partner) {
+      // Partner disconnected
+      console.log('📞 Partner disconnected, cleaning up...')
+      hadPartnerRef.current = false
       peerSessionRef.current = null
       cleanupWebRTC()
     }
-  }, [partner, peer, cleanupWebRTC])
+  }, [partner, cleanupWebRTC])
 
-  // Update audio levels
+  // Update audio levels - use ref to avoid dependency on localAudioLevel
+  const localAudioLevelRef = useRef(localAudioLevel)
+  useEffect(() => {
+    localAudioLevelRef.current = localAudioLevel
+  }, [localAudioLevel])
+  
   useEffect(() => {
     if (isUnmountingRef.current) return
 
     const interval = setInterval(() => {
       if (!isUnmountingRef.current) {
-        updateAudioLevel(localAudioLevel)
+        updateAudioLevel(localAudioLevelRef.current)
       }
     }, 100)
 
     return () => clearInterval(interval)
-  }, [localAudioLevel, updateAudioLevel])
+  }, [updateAudioLevel])
 
   const handleStartCall = useCallback(async (userFilters?: UserFilters) => {
     if (isUnmountingRef.current) return
