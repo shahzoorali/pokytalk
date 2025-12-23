@@ -71,6 +71,13 @@ export function ConnectionScreen({
     country.name.toLowerCase().startsWith(countrySearch.toLowerCase())
   )
 
+  // Store user country for GDPR detection
+  useEffect(() => {
+    if (user?.country && typeof window !== 'undefined') {
+      localStorage.setItem('user_country', user.country)
+    }
+  }, [user?.country])
+
   // Handle remote audio stream
   useEffect(() => {
     if (remoteAudioRef.current && remoteStream) {
@@ -157,6 +164,11 @@ export function ConnectionScreen({
           <div className="flex items-center space-x-3">
             <h1 className="text-2xl font-bold text-white">Pokytalk</h1>
             <span className="text-gray-400 text-sm">Voice chat with random people</span>
+          </div>
+          <div className="flex items-center space-x-4 text-xs text-gray-400">
+            <a href="/privacy" className="hover:text-white transition-colors">Privacy</a>
+            <span>•</span>
+            <a href="/terms" className="hover:text-white transition-colors">Terms</a>
           </div>
           <div className="flex items-center space-x-4">
             {/* Filters Button */}

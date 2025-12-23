@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import { GDPRConsent } from '@/components/GDPRConsent'
+import Script from 'next/script'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -23,9 +25,49 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        {/* Google Consent Mode v2 - Must be loaded before any Google tags */}
+        <Script
+          id="google-consent-mode"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('consent', 'default', {
+                'ad_storage': 'denied',
+                'analytics_storage': 'denied',
+                'functionality_storage': 'denied',
+                'personalization_storage': 'denied',
+                'wait_for_update': 500
+              });
+            `,
+          }}
+        />
+        {/* Google Analytics */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-HJ73DZCXCR"
+          strategy="afterInteractive"
+        />
+        <Script
+          id="google-analytics"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-HJ73DZCXCR', {
+                'anonymize_ip': true
+              });
+            `,
+          }}
+        />
+      </head>
       <body className={inter.className}>
         <div className="min-h-screen bg-gray-900">
           {children}
+          <GDPRConsent />
         </div>
       </body>
     </html>
