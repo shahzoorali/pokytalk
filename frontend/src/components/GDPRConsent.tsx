@@ -93,42 +93,44 @@ export function GDPRConsent() {
     <>
       {/* Main Consent Banner */}
       {showBanner && !showSettings && (
-        <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-50 p-4 shadow-lg">
+        <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-50 p-3 sm:p-4 shadow-lg">
           <div className="max-w-6xl mx-auto">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <h3 className="text-white font-semibold mb-2">We value your privacy</h3>
-                <p className="text-gray-300 text-sm mb-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex-1 w-full sm:w-auto">
+                <h3 className="text-white font-semibold mb-1 sm:mb-2 text-sm sm:text-base">We value your privacy</h3>
+                <p className="text-gray-300 text-xs sm:text-sm mb-2 sm:mb-3">
                   We use cookies and similar technologies to provide, protect and improve our services, 
                   to show you relevant content, and to help our partners advertise to you. 
                   <Link href="/privacy" className="text-primary-400 hover:text-primary-300 underline ml-1">
                     Learn more
                   </Link>
                 </p>
-                <p className="text-gray-400 text-xs">
+                <p className="text-gray-400 text-xs hidden sm:block">
                   By clicking "Accept all", you consent to our use of cookies. You can also choose which cookies to accept.
                 </p>
               </div>
-              <div className="flex items-center space-x-2 flex-shrink-0">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:space-x-2 w-full sm:w-auto flex-shrink-0">
                 <button
                   onClick={() => setShowSettings(true)}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
+                  className="px-3 sm:px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs sm:text-sm font-medium transition-colors flex items-center justify-center space-x-1"
                 >
-                  <Settings className="w-4 h-4" />
+                  <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   <span>Customize</span>
                 </button>
-                <button
-                  onClick={rejectAll}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
-                >
-                  Reject all
-                </button>
-                <button
-                  onClick={acceptAll}
-                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors"
-                >
-                  Accept all
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={rejectAll}
+                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs sm:text-sm font-medium transition-colors"
+                  >
+                    Reject all
+                  </button>
+                  <button
+                    onClick={acceptAll}
+                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-xs sm:text-sm font-medium transition-colors"
+                  >
+                    Accept all
+                  </button>
+                </div>
               </div>
             </div>
           </div>

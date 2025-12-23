@@ -161,25 +161,30 @@ export function ConnectionScreen({
   return (
     <div className="min-h-screen flex flex-col relative z-10">
       {/* Top Menu */}
-      <div className="bg-gray-800 border-b border-gray-700 px-4 py-3">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-bold text-white">Pokytalk</h1>
-            <span className="text-gray-400 text-sm">Voice chat with random people</span>
+      <div className="bg-gray-800 border-b border-gray-700 px-3 sm:px-4 py-2 sm:py-3">
+        <div className="max-w-4xl mx-auto">
+          {/* First Row: Title and Links */}
+          <div className="flex items-center justify-between mb-2 sm:mb-0">
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <h1 className="text-lg sm:text-2xl font-bold text-white">Pokytalk</h1>
+              <span className="hidden sm:inline text-gray-400 text-sm">Voice chat with random people</span>
+            </div>
+            <div className="flex items-center space-x-2 sm:space-x-4 text-xs text-gray-400">
+              <a href="/privacy" className="hover:text-white transition-colors">Privacy</a>
+              <span className="hidden sm:inline">•</span>
+              <a href="/terms" className="hover:text-white transition-colors">Terms</a>
+            </div>
           </div>
-          <div className="flex items-center space-x-4 text-xs text-gray-400">
-            <a href="/privacy" className="hover:text-white transition-colors">Privacy</a>
-            <span>•</span>
-            <a href="/terms" className="hover:text-white transition-colors">Terms</a>
-          </div>
-          <div className="flex items-center space-x-4">
+          
+          {/* Second Row: Filters and Stats (mobile) or inline (desktop) */}
+          <div className="flex items-center justify-between sm:justify-end sm:space-x-4">
             {/* Filters Button */}
             <button
               onClick={() => setIsFiltersModalOpen(true)}
-              className="flex items-center space-x-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+              className="flex items-center space-x-1.5 sm:space-x-2 px-2 sm:px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
             >
               <Globe className="w-4 h-4 text-primary-400" />
-              <span className="text-white text-sm">Filters</span>
+              <span className="text-white text-xs sm:text-sm">Filters</span>
               {selectedCountries.length > 0 && (
                 <span className="bg-primary-600 text-white text-xs px-1.5 py-0.5 rounded-full">
                   {selectedCountries.length}
@@ -188,13 +193,13 @@ export function ConnectionScreen({
             </button>
             
             {stats && (
-              <div className="flex items-center space-x-4 text-sm">
-                <div className="flex items-center space-x-2">
-                  <Users className="w-4 h-4 text-primary-400" />
+              <div className="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm">
+                <div className="flex items-center space-x-1 sm:space-x-2">
+                  <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary-400" />
                   <span className="text-gray-300">{stats.onlineUsers}</span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Phone className="w-4 h-4 text-primary-400" />
+                <div className="flex items-center space-x-1 sm:space-x-2">
+                  <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary-400" />
                   <span className="text-gray-300">{stats.activeCalls}</span>
                 </div>
               </div>
@@ -204,26 +209,27 @@ export function ConnectionScreen({
       </div>
 
       {/* Status Bar */}
-      <div className="bg-gray-800/50 border-b border-gray-700 px-4 py-3">
+      <div className="bg-gray-800/50 border-b border-gray-700 px-3 sm:px-4 py-2 sm:py-3">
         <div className="max-w-4xl mx-auto">
           <div className="text-center">
             {!isInCall && !isWaiting && !isInitialized && (
-              <p className="text-gray-300 text-sm">
+              <p className="text-gray-300 text-xs sm:text-sm">
                 Click on <span className="text-primary-400 font-semibold">Call</span> to find a stranger to talk with
               </p>
             )}
             {isWaiting && (
-              <p className="text-gray-300 text-sm">
-                <span className="text-primary-400 font-semibold">Connecting...</span> Finding someone to talk with
+              <p className="text-gray-300 text-xs sm:text-sm flex items-center justify-center space-x-2">
+                <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-2 border-primary-400 border-t-transparent"></div>
+                <span><span className="text-primary-400 font-semibold">Connecting...</span> Finding someone to talk with</span>
               </p>
             )}
             {isInCall && partner && (
-              <div className="flex items-center justify-center space-x-2">
-                <p className="text-gray-300 text-sm">
+              <div className="flex items-center justify-center space-x-2 flex-wrap">
+                <p className="text-gray-300 text-xs sm:text-sm">
                   Your partner is from <span className="text-white font-semibold">{getCountryName(partner.country || '')}</span>
                 </p>
                 {partner.country && (
-                  <Flag countryCode={partner.country} size={20} />
+                  <Flag countryCode={partner.country} size={16} className="sm:w-5 sm:h-5" />
                 )}
               </div>
             )}
@@ -234,6 +240,42 @@ export function ConnectionScreen({
       {/* Main Content */}
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="max-w-md w-full space-y-6">
+          {/* Community Guidelines - Only show when not in call */}
+          {!isInCall && (
+            <div className="bg-gray-800/80 backdrop-blur-sm border border-gray-700/50 rounded-xl p-4 sm:p-6 shadow-xl">
+              <h2 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4 flex items-center space-x-2">
+                <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary-400" />
+                <span>Community Guidelines</span>
+              </h2>
+              <div className="space-y-2 sm:space-y-3 text-xs sm:text-sm text-gray-300">
+              <div className="flex items-start space-x-2">
+                <span className="text-primary-400 font-bold">18+</span>
+                <p>You must be 18 or older to use this service. We're serious about this.</p>
+              </div>
+              <div className="flex items-start space-x-2">
+                <span className="text-red-400 font-bold">⚠️</span>
+                <p><strong>Stay anonymous.</strong> Never share your real name, location, phone, email, or social media. Protect your privacy.</p>
+              </div>
+              <div className="flex items-start space-x-2">
+                <span className="text-primary-400 font-bold">🤝</span>
+                <p><strong>Be respectful.</strong> Treat others how you want to be treated. No harassment, hate speech, or bullying.</p>
+              </div>
+              <div className="flex items-start space-x-2">
+                <span className="text-primary-400 font-bold">🚫</span>
+                <p><strong>No illegal content.</strong> Don't share anything illegal, violent, or that promotes harm.</p>
+              </div>
+              <div className="flex items-start space-x-2">
+                <span className="text-primary-400 font-bold">📢</span>
+                <p><strong>Report bad behavior.</strong> If someone makes you uncomfortable or violates these rules, report them immediately.</p>
+              </div>
+              <div className="pt-2 border-t border-gray-700/50">
+                <p className="text-xs text-gray-400">
+                  By using Pokytalk, you agree to our <a href="/terms" className="text-primary-400 hover:text-primary-300 underline">Terms</a> and <a href="/privacy" className="text-primary-400 hover:text-primary-300 underline">Privacy Policy</a>. Violations may result in permanent ban.
+                </p>
+              </div>
+            </div>
+          </div>
+          )}
 
           {/* Single Call Button - Changes state based on call status */}
           <div className="flex flex-col items-center space-y-4">
