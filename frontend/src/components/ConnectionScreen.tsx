@@ -16,6 +16,7 @@ interface ConnectionScreenProps {
   isWaiting?: boolean
   isLoading?: boolean
   // Call state props
+  user?: User | null
   partner?: User | null
   sessionId?: string | null
   isWebRTCConnected?: boolean
@@ -40,6 +41,7 @@ export function ConnectionScreen({
   isWaiting = false,
   isLoading: externalLoading = false,
   // Call state
+  user,
   partner,
   sessionId,
   isWebRTCConnected = false,

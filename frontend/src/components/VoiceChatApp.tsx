@@ -287,6 +287,7 @@ export function VoiceChatApp() {
         isWaiting={isWaiting}
         isLoading={isLoading}
         // Call state props
+        user={user}
         partner={partner}
         sessionId={sessionId}
         isWebRTCConnected={isWebRTCConnected}

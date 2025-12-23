@@ -27,20 +27,26 @@ export function isGDPRCountry(countryCode: string | null | undefined): boolean {
 export function initializeConsentMode() {
   if (typeof window === 'undefined') return
 
-  // Initialize gtag with default consent state (denied for GDPR countries)
-  window.gtag = window.gtag || function() {
-    (window.gtag.q = window.gtag.q || []).push(arguments)
+  // Initialize dataLayer and gtag
+  window.dataLayer = window.dataLayer || []
+  
+  // Initialize gtag function if not already defined
+  if (!window.gtag) {
+    window.gtag = function() {
+      window.dataLayer!.push(arguments)
+    } as any
   }
-  window.gtag.l = +new Date()
 
   // Set default consent state to denied for GDPR compliance
-  window.gtag('consent', 'default', {
-    ad_storage: 'denied',
-    analytics_storage: 'denied',
-    functionality_storage: 'denied',
-    personalization_storage: 'denied',
-    wait_for_update: 500,
-  })
+  if (window.gtag) {
+    window.gtag('consent', 'default', {
+      ad_storage: 'denied',
+      analytics_storage: 'denied',
+      functionality_storage: 'denied',
+      personalization_storage: 'denied',
+      wait_for_update: 500,
+    })
+  }
 }
 
 // Update consent state
@@ -101,10 +107,7 @@ declare global {
       targetId: string | 'default' | 'update',
       config?: Record<string, any>
     ) => void
-    gtag?: {
-      q: any[]
-      l: number
-    }
+    dataLayer?: any[]
   }
 }
 
