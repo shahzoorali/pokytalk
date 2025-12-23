@@ -3,19 +3,10 @@ frontend:
   phases:
     preBuild:
       commands:
-        - pwd
-        - ls -la
-        - |
-          cd frontend || {
-            echo "Frontend directory not found. Current directory contents:"
-            ls -la
-            exit 1
-          }
-        - npm install
+        - cd frontend && npm install
     build:
       commands:
-        - cd frontend
-        - npm run build
+        - cd frontend && npm run build
   artifacts:
     baseDirectory: frontend/out
     files:
