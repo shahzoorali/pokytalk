@@ -426,12 +426,11 @@ export function useWebRTC() {
           peer.signal(message.sdp)
           break
         case 'ice-candidate':
-          // For ICE candidates, simple-peer expects { candidate: {...} } format
-          // We receive { candidate, sdpMLineIndex, sdpMid } and need to wrap it
+          // For ICE candidates, simple-peer expects { type: 'candidate', candidate: {...} } format
           const candidateData = message.candidate
           if (candidateData) {
             // Wrap in the format simple-peer expects
-            const signalData = { candidate: candidateData }
+            const signalData = { type: 'candidate' as const, candidate: candidateData }
             console.log('🧊 Signaling ICE candidate')
             peer.signal(signalData)
           }
