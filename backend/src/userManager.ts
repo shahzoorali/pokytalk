@@ -105,20 +105,42 @@ export class UserManager {
 
   async getCountryByIP(ip: string): Promise<string | null> {
     try {
+      // Handle array of IPs (from x-forwarded-for header)
+      let cleanIP = Array.isArray(ip) ? ip[0] : ip;
+      
       // Remove IPv6 prefix if present
-      const cleanIP = ip.replace(/^::ffff:/, '');
+      cleanIP = cleanIP.replace(/^::ffff:/, '');
       
       // Skip localhost and private IPs
       if (cleanIP === '127.0.0.1' || cleanIP === 'localhost' || 
           cleanIP.startsWith('192.168.') || cleanIP.startsWith('10.') || 
-          cleanIP.startsWith('172.')) {
+          cleanIP.startsWith('172.16.') || cleanIP.startsWith('172.17.') ||
+          cleanIP.startsWith('172.18.') || cleanIP.startsWith('172.19.') ||
+          cleanIP.startsWith('172.20.') || cleanIP.startsWith('172.21.') ||
+          cleanIP.startsWith('172.22.') || cleanIP.startsWith('172.23.') ||
+          cleanIP.startsWith('172.24.') || cleanIP.startsWith('172.25.') ||
+          cleanIP.startsWith('172.26.') || cleanIP.startsWith('172.27.') ||
+          cleanIP.startsWith('172.28.') || cleanIP.startsWith('172.29.') ||
+          cleanIP.startsWith('172.30.') || cleanIP.startsWith('172.31.')) {
+        console.log(`⚠️ Skipping country detection for private/local IP: ${cleanIP}`);
         return null;
       }
 
-      const response = await axios.get(`http://ip-api.com/json/${cleanIP}?fields=countryCode`);
-      return response.data.countryCode || null;
-    } catch (error) {
-      console.error('Error getting country by IP:', error);
+      console.log(`🌐 Fetching country for IP: ${cleanIP}`);
+      const response = await axios.get(`http://ip-api.com/json/${cleanIP}?fields=countryCode`, {
+        timeout: 5000
+      });
+      
+      const countryCode = response.data?.countryCode || null;
+      if (countryCode) {
+        console.log(`✅ Country detected: ${countryCode} for IP: ${cleanIP}`);
+      } else {
+        console.log(`⚠️ No country code in response for IP: ${cleanIP}`, response.data);
+      }
+      
+      return countryCode;
+    } catch (error: any) {
+      console.error(`❌ Error getting country by IP ${ip}:`, error.message || error);
       return null;
     }
   }

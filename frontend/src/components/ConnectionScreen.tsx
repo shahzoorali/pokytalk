@@ -226,7 +226,7 @@ export function ConnectionScreen({
             {isInCall && partner && (
               <div className="flex items-center justify-center space-x-2 flex-wrap">
                 <p className="text-gray-300 text-xs sm:text-sm">
-                  Your partner is from <span className="text-white font-semibold">{getCountryName(partner.country || '')}</span>
+                  Your partner is from <span className="text-white font-semibold">{getCountryName(partner.country)}</span>
                 </p>
                 {partner.country && (
                   <Flag countryCode={partner.country} size={16} className="sm:w-5 sm:h-5" />
@@ -298,7 +298,7 @@ export function ConnectionScreen({
                     handleStartCall()
                   }
                 }}
-                disabled={loading || !isConnected || isWaiting}
+                disabled={isInCall ? loading : (loading || !isConnected || isWaiting)}
                 className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 ${
                   isInCall
                     ? 'bg-red-600 hover:bg-red-700'

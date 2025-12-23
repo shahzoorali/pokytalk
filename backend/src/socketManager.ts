@@ -28,13 +28,13 @@ export class SocketManager {
           // Auto-detect country from IP if not provided
           let detectedCountry = data.country;
           if (!detectedCountry) {
-            const clientIP = socket.handshake.address;
+            const clientIP = socket.handshake.address || socket.request.headers['x-forwarded-for'] || socket.request.socket.remoteAddress;
             console.log(`🌍 Detecting country for IP: ${clientIP}`);
             detectedCountry = await this.userManager.getCountryByIP(clientIP) || undefined;
             if (detectedCountry) {
               console.log(`✅ Detected country: ${detectedCountry} for IP: ${clientIP}`);
             } else {
-              console.log(`⚠️ Could not detect country for IP: ${clientIP}`);
+              console.log(`⚠️ Could not detect country for IP: ${clientIP} - this may be a local/private IP`);
             }
           }
           
@@ -44,7 +44,7 @@ export class SocketManager {
           socket.emit('user:connect', user);
           this.updateStats();
           
-          console.log(`✅ User connected successfully: ${user.id} (Age: ${user.age}, Country: ${user.country})`);
+          console.log(`✅ User connected successfully: ${user.id} (Age: ${user.age}, Country: ${user.country || 'Not detected'})`);
         } catch (error) {
           console.error(`❌ Error creating user for ${socket.id}:`, error);
         }
@@ -91,6 +91,11 @@ export class SocketManager {
 
           // Deterministically choose an initiator so only one side creates the offer
           const initiatorId = user.id < partner.id ? user.id : partner.id;
+          
+          // Log partner info for debugging
+          console.log(`📤 Sending call:matched to ${user.id}: partner=${partner.id}, country=${partner.country || 'undefined'}`);
+          console.log(`📤 Sending call:matched to ${partner.id}: partner=${user.id}, country=${user.country || 'undefined'}`);
+          
           // Notify both users with initiator information
           socket.emit('call:matched', partner, session.id, initiatorId);
           this.io.to(partner.socketId).emit('call:matched', user, session.id, initiatorId);

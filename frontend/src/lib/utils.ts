@@ -31,11 +31,11 @@ export function generateYears(): number[] {
   return years
 }
 
-export function getCountryName(countryCode: string): string {
-  if (!countryCode) return ''
+export function getCountryName(countryCode: string | undefined | null): string {
+  if (!countryCode || countryCode.trim() === '') return 'Unknown'
   
   // Import COUNTRIES dynamically to avoid circular dependency
   const { COUNTRIES } = require('./countries')
-  const country = COUNTRIES.find((c: { code: string }) => c.code === countryCode)
+  const country = COUNTRIES.find((c: { code: string }) => c.code.toUpperCase() === countryCode.toUpperCase())
   return country ? country.name : countryCode
 }

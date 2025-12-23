@@ -79,6 +79,13 @@ export function useSocket() {
     })
 
     newSocket.on('call:matched', (partnerData: User, sessionId: string, initiatorId?: string) => {
+      console.log('📞 call:matched received:', {
+        partnerId: partnerData.id,
+        partnerCountry: partnerData.country || 'undefined',
+        sessionId,
+        initiatorId,
+        fullPartnerData: partnerData
+      })
       setPartner(partnerData)
       setSessionId(sessionId)
       setIsWaiting(false)
@@ -87,7 +94,7 @@ export function useSocket() {
         // @ts-expect-error augment runtime value
         newSocket.__webrtcInitiatorId = initiatorId
       }
-      console.log('Matched with partner:', partnerData.id, 'initiatorId:', initiatorId)
+      console.log('✅ Matched with partner:', partnerData.id, 'Country:', partnerData.country || 'Not set')
     })
 
     newSocket.on('call:ended', (sessionId: string) => {
