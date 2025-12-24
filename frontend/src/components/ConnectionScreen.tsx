@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Phone, Users, Globe, ChevronDown, ChevronUp, Mic, MicOff, MessageSquare, X, Send, Search } from 'lucide-react'
+import { Phone, Users, Globe, ChevronDown, ChevronUp, Mic, MicOff, MessageSquare, X, Send, Search, Gamepad2 } from 'lucide-react'
 import { ServerStats, UserFilters, User, ChatMessage } from '@/types'
 import { AudioLevelBar } from './AudioLevelBar'
 import { Flag } from './Flag'
+import { HangmanGame } from './HangmanGame'
 import { COUNTRIES } from '@/lib/countries'
 import { getCountryName } from '@/lib/utils'
+import { useGame } from '@/hooks/useGame'
 
 interface ConnectionScreenProps {
   onStartCall: (filters?: UserFilters) => void
@@ -31,6 +33,8 @@ interface ConnectionScreenProps {
   onToggleChat?: () => void
   onSendMessage?: (content: string) => void
   remoteStream?: MediaStream | null
+  // Game props
+  gameHook?: ReturnType<typeof useGame>
 }
 
 export function ConnectionScreen({ 
@@ -56,12 +60,15 @@ export function ConnectionScreen({
   onToggleChat,
   onSendMessage,
   remoteStream,
+  // Game
+  gameHook,
 }: ConnectionScreenProps) {
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false)
   const [countrySearch, setCountrySearch] = useState('')
   const [messageInput, setMessageInput] = useState('')
+  const [isGameOpen, setIsGameOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const remoteAudioRef = useRef<HTMLAudioElement>(null)
   
@@ -388,6 +395,25 @@ export function ConnectionScreen({
                   >
                     <MessageSquare className="w-4 h-4" />
                   </button>
+
+                  {/* Game Button */}
+                  {gameHook && (
+                    <button
+                      onClick={() => setIsGameOpen(true)}
+                      className={`p-2 rounded-full transition-colors relative ${
+                        gameHook.isPlaying || gameHook.gameStatus === 'invite_received'
+                          ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                          : 'bg-gray-700 hover:bg-gray-600 text-white'
+                      }`}
+                      title="Play Games"
+                    >
+                      <Gamepad2 className="w-4 h-4" />
+                      {/* Notification dot for invite */}
+                      {gameHook.gameStatus === 'invite_received' && (
+                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 {/* Chat Panel */}
@@ -554,6 +580,31 @@ export function ConnectionScreen({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Hangman Game Modal */}
+      {gameHook && (
+        <HangmanGame
+          gameStatus={gameHook.gameStatus}
+          game={gameHook.game}
+          role={gameHook.role}
+          pendingInvite={gameHook.pendingInvite}
+          gameResult={gameHook.gameResult}
+          error={gameHook.error}
+          inviteToGame={gameHook.inviteToGame}
+          acceptInvite={gameHook.acceptInvite}
+          declineInvite={gameHook.declineInvite}
+          setWord={gameHook.setWord}
+          guessLetter={gameHook.guessLetter}
+          guessWord={gameHook.guessWord}
+          endGame={gameHook.endGame}
+          requestRematch={gameHook.requestRematch}
+          acceptRematch={gameHook.acceptRematch}
+          resetGame={gameHook.resetGame}
+          clearError={gameHook.clearError}
+          isOpen={isGameOpen || gameHook.gameStatus === 'invite_received'}
+          onClose={() => setIsGameOpen(false)}
+        />
       )}
     </div>
   )

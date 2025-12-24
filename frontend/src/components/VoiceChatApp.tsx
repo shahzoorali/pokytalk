@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSocket } from '@/hooks/useSocket'
 import { useWebRTC } from '@/hooks/useWebRTC'
+import { useGame } from '@/hooks/useGame'
 import { ConnectionScreen } from './ConnectionScreen'
 import { UserFilters } from '@/types'
 
@@ -49,6 +50,13 @@ export function VoiceChatApp() {
     toggleMute: toggleWebRTCMute,
     cleanup: cleanupWebRTC,
   } = useWebRTC()
+
+  // Game state
+  const gameHook = useGame({
+    socket,
+    sessionId,
+    userId: user?.id || null,
+  })
 
   // Initialize socket connection
   useEffect(() => {
@@ -302,6 +310,8 @@ export function VoiceChatApp() {
         onToggleChat={handleToggleChat}
         onSendMessage={sendMessage}
         remoteStream={remoteStream}
+        // Game props
+        gameHook={gameHook}
       />
 
       {/* Connection status indicator */}

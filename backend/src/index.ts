@@ -9,6 +9,7 @@ import { SocketManager } from './socketManager';
 import { UserManager } from './userManager';
 import { CallManager } from './callManager';
 import { StatsManager } from './statsManager';
+import { GameManager } from './gameManager';
 
 dotenv.config();
 
@@ -111,7 +112,8 @@ console.log('🔧 Initializing managers...');
 const userManager = new UserManager();
 const callManager = new CallManager();
 const statsManager = new StatsManager();
-const socketManager = new SocketManager(io, userManager, callManager, statsManager);
+const gameManager = new GameManager();
+const socketManager = new SocketManager(io, userManager, callManager, statsManager, gameManager);
 console.log('✅ Managers initialized');
 
 // Root route for basic connectivity check

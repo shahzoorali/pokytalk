@@ -64,3 +64,60 @@ export interface WebRTCIceCandidate {
 
 export type WebRTCMessage = WebRTCOffer | WebRTCAnswer | WebRTCIceCandidate;
 
+// Hangman Game Types
+export type HangmanGameState = 'pending' | 'word_setting' | 'guessing' | 'finished';
+
+export interface HangmanGame {
+  id: string;
+  callSessionId: string;
+  setterId: string;
+  guesserId: string;
+  word: string;
+  maskedWord: string;
+  category?: string;
+  guessedLetters: string[];
+  wrongGuesses: string[];
+  maxAttempts: number;
+  attemptsLeft: number;
+  state: HangmanGameState;
+  winner?: 'setter' | 'guesser';
+  createdAt: Date;
+}
+
+export interface GameInvite {
+  fromUserId: string;
+  toUserId: string;
+  sessionId: string;
+  gameType: 'hangman';
+}
+
+export interface HangmanSetWordData {
+  gameId: string;
+  word: string;
+  category?: string;
+}
+
+export interface HangmanGuessData {
+  gameId: string;
+  guess: string; // single letter or full word
+  isFullWordGuess: boolean;
+}
+
+export interface HangmanGuessResult {
+  gameId: string;
+  guess: string;
+  isCorrect: boolean;
+  maskedWord: string;
+  guessedLetters: string[];
+  wrongGuesses: string[];
+  attemptsLeft: number;
+  isGameOver: boolean;
+  winner?: 'setter' | 'guesser';
+  revealedWord?: string;
+}
+
+export interface HangmanGameUpdate {
+  game: HangmanGame;
+  event: 'word_set' | 'guess_result' | 'game_ended';
+}
+

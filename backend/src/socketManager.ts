@@ -2,14 +2,16 @@ import { Server, Socket } from 'socket.io';
 import { UserManager } from './userManager';
 import { CallManager } from './callManager';
 import { StatsManager } from './statsManager';
-import { User, UserFilters, WebRTCMessage, ChatMessage } from './types';
+import { GameManager } from './gameManager';
+import { User, UserFilters, WebRTCMessage, ChatMessage, HangmanSetWordData, HangmanGuessData } from './types';
 
 export class SocketManager {
   constructor(
     private io: Server,
     private userManager: UserManager,
     private callManager: CallManager,
-    private statsManager: StatsManager
+    private statsManager: StatsManager,
+    private gameManager: GameManager
   ) {
     this.setupSocketHandlers();
     this.startStatsUpdateInterval();
@@ -148,6 +150,10 @@ export class SocketManager {
         const session = this.callManager.getSessionByUser(userId);
         if (session) {
           console.log(`📋 Ending session: ${session.id}`);
+          
+          // Clean up any active games for this session
+          this.gameManager.cleanupSession(session.id);
+          
           this.callManager.endSession(session.id);
           
           // Notify partner
@@ -298,6 +304,355 @@ export class SocketManager {
         }
       });
 
+      // ==================== GAME EVENTS ====================
+
+      // Handle game invite
+      socket.on('game:invite', (data: { sessionId: string; gameType: 'hangman' }) => {
+        const userId = socket.data.userId;
+        console.log(`🎮 Game invite from ${userId} for session ${data.sessionId}`);
+        
+        if (!userId) {
+          console.error(`❌ No userId found for game invite from socket ${socket.id}`);
+          return;
+        }
+
+        const user = this.userManager.getUser(userId);
+        if (!user || !user.partnerId) {
+          console.error(`❌ User ${userId} has no partner for game invite`);
+          socket.emit('game:error', 'No partner to invite');
+          return;
+        }
+
+        // Check if there's already an active game or invite
+        const existingGame = this.gameManager.getGameBySession(data.sessionId);
+        if (existingGame) {
+          console.log(`⚠️ Game already exists for session ${data.sessionId}`);
+          socket.emit('game:error', 'A game is already in progress');
+          return;
+        }
+
+        const existingInvite = this.gameManager.getInviteBySession(data.sessionId);
+        if (existingInvite) {
+          console.log(`⚠️ Invite already pending for session ${data.sessionId}`);
+          socket.emit('game:error', 'An invite is already pending');
+          return;
+        }
+
+        // Create invite
+        const inviteId = this.gameManager.createInvite(userId, user.partnerId, data.sessionId);
+        console.log(`📨 Created game invite ${inviteId}`);
+
+        // Notify partner
+        const partner = this.userManager.getUser(user.partnerId);
+        if (partner) {
+          this.io.to(partner.socketId).emit('game:invited', {
+            inviteId,
+            fromUserId: userId,
+            sessionId: data.sessionId,
+            gameType: data.gameType
+          });
+          socket.emit('game:invite-sent', { inviteId });
+        }
+      });
+
+      // Handle game accept
+      socket.on('game:accept', (data: { inviteId: string }) => {
+        const userId = socket.data.userId;
+        console.log(`🎮 Game accept from ${userId} for invite ${data.inviteId}`);
+        
+        if (!userId) {
+          console.error(`❌ No userId found for game accept from socket ${socket.id}`);
+          return;
+        }
+
+        const invite = this.gameManager.getInvite(data.inviteId);
+        if (!invite) {
+          console.error(`❌ Invite ${data.inviteId} not found`);
+          socket.emit('game:error', 'Invite not found or expired');
+          return;
+        }
+
+        if (invite.toUserId !== userId) {
+          console.error(`❌ User ${userId} is not the invite recipient`);
+          socket.emit('game:error', 'Invalid invite');
+          return;
+        }
+
+        // Remove the invite
+        this.gameManager.removeInvite(data.inviteId);
+
+        // Randomly assign roles
+        const isInviterSetter = Math.random() < 0.5;
+        const setterId = isInviterSetter ? invite.fromUserId : invite.toUserId;
+        const guesserId = isInviterSetter ? invite.toUserId : invite.fromUserId;
+
+        // Create the game
+        const game = this.gameManager.createGame(invite.sessionId, setterId, guesserId);
+        console.log(`🎮 Created game ${game.id} - Setter: ${setterId}, Guesser: ${guesserId}`);
+
+        // Notify both players
+        const inviter = this.userManager.getUser(invite.fromUserId);
+        const accepter = this.userManager.getUser(invite.toUserId);
+
+        if (inviter) {
+          const inviterRole = setterId === inviter.id ? 'setter' : 'guesser';
+          this.io.to(inviter.socketId).emit('game:started', {
+            game: this.gameManager.getPublicGameState(game, inviter.id),
+            role: inviterRole
+          });
+        }
+
+        if (accepter) {
+          const accepterRole = setterId === accepter.id ? 'setter' : 'guesser';
+          this.io.to(accepter.socketId).emit('game:started', {
+            game: this.gameManager.getPublicGameState(game, accepter.id),
+            role: accepterRole
+          });
+        }
+      });
+
+      // Handle game decline
+      socket.on('game:decline', (data: { inviteId: string }) => {
+        const userId = socket.data.userId;
+        console.log(`🎮 Game decline from ${userId} for invite ${data.inviteId}`);
+        
+        const invite = this.gameManager.getInvite(data.inviteId);
+        if (!invite) return;
+
+        this.gameManager.removeInvite(data.inviteId);
+
+        // Notify the inviter
+        const inviter = this.userManager.getUser(invite.fromUserId);
+        if (inviter) {
+          this.io.to(inviter.socketId).emit('game:declined', { inviteId: data.inviteId });
+        }
+      });
+
+      // Handle set word (from setter)
+      socket.on('game:set-word', (data: HangmanSetWordData) => {
+        const userId = socket.data.userId;
+        console.log(`🎮 Set word from ${userId} for game ${data.gameId}`);
+        
+        if (!userId) {
+          console.error(`❌ No userId found for set-word from socket ${socket.id}`);
+          return;
+        }
+
+        const game = this.gameManager.getGame(data.gameId);
+        if (!game) {
+          socket.emit('game:error', 'Game not found');
+          return;
+        }
+
+        if (game.setterId !== userId) {
+          socket.emit('game:error', 'Only the word setter can set the word');
+          return;
+        }
+
+        const updatedGame = this.gameManager.setWord(data.gameId, data.word, data.category);
+        if (!updatedGame) {
+          socket.emit('game:error', 'Invalid word. Use 3-15 letters only.');
+          return;
+        }
+
+        console.log(`✅ Word set for game ${data.gameId}: ${updatedGame.word.length} letters`);
+
+        // Notify both players
+        const setter = this.userManager.getUser(game.setterId);
+        const guesser = this.userManager.getUser(game.guesserId);
+
+        if (setter) {
+          this.io.to(setter.socketId).emit('game:word-set', {
+            game: this.gameManager.getPublicGameState(updatedGame, setter.id)
+          });
+        }
+
+        if (guesser) {
+          this.io.to(guesser.socketId).emit('game:word-set', {
+            game: this.gameManager.getPublicGameState(updatedGame, guesser.id)
+          });
+        }
+      });
+
+      // Handle guess (letter or full word)
+      socket.on('game:guess', (data: HangmanGuessData) => {
+        const userId = socket.data.userId;
+        console.log(`🎮 Guess from ${userId} for game ${data.gameId}: "${data.guess}" (full word: ${data.isFullWordGuess})`);
+        
+        if (!userId) {
+          console.error(`❌ No userId found for guess from socket ${socket.id}`);
+          return;
+        }
+
+        const game = this.gameManager.getGame(data.gameId);
+        if (!game) {
+          socket.emit('game:error', 'Game not found');
+          return;
+        }
+
+        if (game.guesserId !== userId) {
+          socket.emit('game:error', 'Only the guesser can make guesses');
+          return;
+        }
+
+        if (game.state !== 'guessing') {
+          socket.emit('game:error', 'Game is not in guessing phase');
+          return;
+        }
+
+        // Process the guess
+        const result = data.isFullWordGuess
+          ? this.gameManager.guessWord(data.gameId, data.guess)
+          : this.gameManager.guessLetter(data.gameId, data.guess);
+
+        if (!result) {
+          socket.emit('game:error', 'Invalid guess');
+          return;
+        }
+
+        console.log(`🎯 Guess result: ${result.isCorrect ? 'CORRECT' : 'WRONG'}, Attempts left: ${result.attemptsLeft}`);
+
+        // Notify both players
+        const setter = this.userManager.getUser(game.setterId);
+        const guesser = this.userManager.getUser(game.guesserId);
+
+        if (setter) {
+          this.io.to(setter.socketId).emit('game:guess-result', result);
+        }
+
+        if (guesser) {
+          this.io.to(guesser.socketId).emit('game:guess-result', result);
+        }
+
+        // If game ended, send game-ended event
+        if (result.isGameOver) {
+          const endedGame = this.gameManager.getGame(data.gameId);
+          if (endedGame) {
+            if (setter) {
+              this.io.to(setter.socketId).emit('game:ended', {
+                game: this.gameManager.getPublicGameState(endedGame, setter.id),
+                winner: result.winner,
+                word: result.revealedWord
+              });
+            }
+            if (guesser) {
+              this.io.to(guesser.socketId).emit('game:ended', {
+                game: this.gameManager.getPublicGameState(endedGame, guesser.id),
+                winner: result.winner,
+                word: result.revealedWord
+              });
+            }
+          }
+        }
+      });
+
+      // Handle game end (early quit)
+      socket.on('game:end', (data: { gameId: string }) => {
+        const userId = socket.data.userId;
+        console.log(`🎮 Game end request from ${userId} for game ${data.gameId}`);
+        
+        const game = this.gameManager.getGame(data.gameId);
+        if (!game) return;
+
+        const endedGame = this.gameManager.endGame(data.gameId);
+        if (!endedGame) return;
+
+        // Notify both players
+        const setter = this.userManager.getUser(game.setterId);
+        const guesser = this.userManager.getUser(game.guesserId);
+
+        if (setter) {
+          this.io.to(setter.socketId).emit('game:ended', {
+            game: this.gameManager.getPublicGameState(endedGame, setter.id),
+            winner: undefined,
+            word: endedGame.word,
+            reason: 'quit'
+          });
+        }
+
+        if (guesser) {
+          this.io.to(guesser.socketId).emit('game:ended', {
+            game: this.gameManager.getPublicGameState(endedGame, guesser.id),
+            winner: undefined,
+            word: endedGame.word,
+            reason: 'quit'
+          });
+        }
+      });
+
+      // Handle rematch request
+      socket.on('game:rematch', (data: { sessionId: string }) => {
+        const userId = socket.data.userId;
+        console.log(`🎮 Rematch request from ${userId} for session ${data.sessionId}`);
+        
+        if (!userId) return;
+
+        const user = this.userManager.getUser(userId);
+        if (!user || !user.partnerId) {
+          socket.emit('game:error', 'No partner for rematch');
+          return;
+        }
+
+        // Get the previous game to swap roles
+        const prevGame = this.gameManager.getGameBySession(data.sessionId);
+        
+        // Create invite with swapped roles hint
+        const inviteId = this.gameManager.createInvite(userId, user.partnerId, data.sessionId);
+
+        const partner = this.userManager.getUser(user.partnerId);
+        if (partner) {
+          this.io.to(partner.socketId).emit('game:rematch-invited', {
+            inviteId,
+            fromUserId: userId,
+            sessionId: data.sessionId,
+            prevSetterId: prevGame?.setterId
+          });
+          socket.emit('game:invite-sent', { inviteId, isRematch: true });
+        }
+      });
+
+      // Handle rematch accept
+      socket.on('game:rematch-accept', (data: { inviteId: string; prevSetterId?: string }) => {
+        const userId = socket.data.userId;
+        console.log(`🎮 Rematch accept from ${userId}`);
+        
+        if (!userId) return;
+
+        const invite = this.gameManager.getInvite(data.inviteId);
+        if (!invite || invite.toUserId !== userId) {
+          socket.emit('game:error', 'Invalid rematch invite');
+          return;
+        }
+
+        this.gameManager.removeInvite(data.inviteId);
+
+        // Swap roles from previous game
+        const setterId = data.prevSetterId === invite.fromUserId ? invite.toUserId : invite.fromUserId;
+        const guesserId = data.prevSetterId === invite.fromUserId ? invite.fromUserId : invite.toUserId;
+
+        const game = this.gameManager.createGame(invite.sessionId, setterId, guesserId);
+        console.log(`🎮 Rematch game ${game.id} - Setter: ${setterId}, Guesser: ${guesserId}`);
+
+        const inviter = this.userManager.getUser(invite.fromUserId);
+        const accepter = this.userManager.getUser(invite.toUserId);
+
+        if (inviter) {
+          this.io.to(inviter.socketId).emit('game:started', {
+            game: this.gameManager.getPublicGameState(game, inviter.id),
+            role: setterId === inviter.id ? 'setter' : 'guesser'
+          });
+        }
+
+        if (accepter) {
+          this.io.to(accepter.socketId).emit('game:started', {
+            game: this.gameManager.getPublicGameState(game, accepter.id),
+            role: setterId === accepter.id ? 'setter' : 'guesser'
+          });
+        }
+      });
+
+      // ==================== END GAME EVENTS ====================
+
       // Handle disconnect
       socket.on('disconnect', (reason) => {
         const userId = socket.data.userId;
@@ -315,6 +670,10 @@ export class SocketManager {
               const session = this.callManager.getSessionByUser(userId);
               if (session) {
                 console.log(`📋 Ending session: ${session.id}`);
+                
+                // Clean up any active games for this session
+                this.gameManager.cleanupSession(session.id);
+                
                 this.callManager.endSession(session.id);
                 
                 const partner = this.userManager.getUser(user.partnerId);
@@ -379,8 +738,12 @@ export class SocketManager {
   private startCleanupInterval(): void {
     setInterval(() => {
       const cleanedSessions = this.callManager.cleanupInactiveSessions();
+      const cleanedGames = this.gameManager.cleanupOldGames();
       if (cleanedSessions > 0) {
         console.log(`🧹 Cleaned up ${cleanedSessions} inactive sessions`);
+      }
+      if (cleanedGames > 0) {
+        console.log(`🧹 Cleaned up ${cleanedGames} old games`);
       }
     }, 60000); // Cleanup every minute
   }
