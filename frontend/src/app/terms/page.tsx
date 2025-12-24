@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { AdSense } from '@/components/AdSense'
 
 export default function TermsPage() {
   return (
@@ -135,6 +136,17 @@ export default function TermsPage() {
               If you have questions about these Terms of Service or need to report violations, please contact us at: <a href="mailto:legal@pokytalk.com" className="text-primary-400 hover:text-primary-300">legal@pokytalk.com</a>
             </p>
           </section>
+        </div>
+
+        {/* AdSense Ad - Only on content-rich pages */}
+        <div className="mt-8 pt-8 border-t border-gray-700">
+          <div className="flex justify-center">
+            <AdSense 
+              adSlot="YOUR_TERMS_PAGE_AD_SLOT_ID"
+              adFormat="auto"
+              fullWidthResponsive={true}
+            />
+          </div>
         </div>
       </div>
     </div>
