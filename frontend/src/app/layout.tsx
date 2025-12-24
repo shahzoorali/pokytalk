@@ -11,6 +11,11 @@ export const metadata: Metadata = {
   description: 'Connect with random people around the world through voice chat',
   keywords: 'voice chat, random chat, online chat, pokytalk',
   authors: [{ name: 'Pokytalk Team' }],
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
+  },
 }
 
 export const viewport = {

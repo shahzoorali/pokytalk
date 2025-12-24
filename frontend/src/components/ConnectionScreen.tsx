@@ -65,6 +65,7 @@ export function ConnectionScreen({
 }: ConnectionScreenProps) {
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isEndingCall, setIsEndingCall] = useState(false)
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false)
   const [countrySearch, setCountrySearch] = useState('')
   const [messageInput, setMessageInput] = useState('')
@@ -73,7 +74,18 @@ export function ConnectionScreen({
   const remoteAudioRef = useRef<HTMLAudioElement>(null)
   
   const loading = isLoading || externalLoading
+  
+  // isInCall: true only when we have partner AND sessionId (actual call state)
   const isInCall = !!partner && !!sessionId
+  
+  // Reset all loading states when call ends
+  useEffect(() => {
+    if (!isInCall) {
+      // Not in call - ensure all loading states are reset
+      setIsLoading(false)
+      setIsEndingCall(false)
+    }
+  }, [isInCall])
 
   // Filter countries based on search
   const filteredCountries = COUNTRIES.filter(country =>
@@ -225,10 +237,10 @@ export function ConnectionScreen({
               </p>
             )}
             {isWaiting && (
-              <p className="text-gray-300 text-xs sm:text-sm flex items-center justify-center space-x-2">
+              <div className="text-gray-300 text-xs sm:text-sm flex items-center justify-center space-x-2">
                 <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-2 border-primary-400 border-t-transparent"></div>
                 <span><span className="text-primary-400 font-semibold">Connecting...</span> Finding someone to talk with</span>
-              </p>
+              </div>
             )}
             {isInCall && partner && (
               <div className="flex items-center justify-center space-x-2 flex-wrap">
@@ -246,9 +258,9 @@ export function ConnectionScreen({
 
       {/* Main Content */}
       <div className="flex-1 flex items-center justify-center p-4">
-        <div className="max-w-md w-full space-y-6">
-          {/* Community Guidelines - Only show when not in call */}
-          {!isInCall && (
+        <div className="w-full max-w-6xl space-y-6">
+          {/* Community Guidelines - Only show when not initialized (first time, before any call) */}
+          {!isInitialized && (
             <div className="bg-gray-800/80 backdrop-blur-sm border border-gray-700/50 rounded-xl p-4 sm:p-6 shadow-xl">
               <h2 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4 flex items-center space-x-2">
                 <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary-400" />
@@ -297,15 +309,18 @@ export function ConnectionScreen({
               <button
                 onClick={() => {
                   if (isInCall) {
-                    // Show confirmation or directly hang up
+                    // Hang up: end the call
                     if (onEndCall) {
                       onEndCall()
                     }
-                  } else if (!isWaiting && !loading) {
-                    handleStartCall()
+                  } else {
+                    // Start call: same function as homepage Call button
+                    if (!isWaiting && !loading && isConnected) {
+                      handleStartCall()
+                    }
                   }
                 }}
-                disabled={isInCall ? loading : (loading || !isConnected || isWaiting)}
+                disabled={isInCall ? false : (loading || !isConnected || isWaiting)}
                 className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 ${
                   isInCall
                     ? 'bg-red-600 hover:bg-red-700'
@@ -314,12 +329,12 @@ export function ConnectionScreen({
                     : 'bg-primary-600 hover:bg-primary-700'
                 } disabled:opacity-50 disabled:cursor-not-allowed shadow-lg`}
               >
-                {/* Loading Spinner */}
-                {(isWaiting || loading) && (
+                {/* Loading Spinner - show when waiting or loading (before call starts) */}
+                {!isInCall && (isWaiting || loading) && (
                   <div className="animate-spin rounded-full h-8 w-8 border-4 border-white border-t-transparent"></div>
                 )}
                 
-                {/* Call Icon - when idle */}
+                {/* Call Icon - when idle (not in call, not waiting, not loading) */}
                 {!isInCall && !isWaiting && !loading && (
                   <Phone className="w-10 h-10 text-white" />
                 )}
@@ -336,126 +351,185 @@ export function ConnectionScreen({
               {isInCall ? 'Hang up' : isWaiting || loading ? 'Connecting...' : 'Call'}
             </span>
 
-            {/* Call Info - Show when in call */}
-            {isInCall && (
-              <div className="w-full bg-gray-800 rounded-lg p-4 space-y-4">
-                {/* Connection Status */}
-                <div className="flex items-center justify-center space-x-2">
-                  <div className={`w-2 h-2 ${
-                    connectionState === 'connected' ? 'bg-green-500' :
-                    connectionState === 'connecting' ? 'bg-yellow-500' :
-                    connectionState === 'failed' ? 'bg-red-500' : 'bg-gray-500'
-                  } rounded-full animate-pulse`}></div>
-                  <span className="text-white text-xs">
-                    {connectionState === 'connected' ? 'Connected' :
-                     connectionState === 'connecting' ? 'Connecting...' :
-                     connectionState === 'failed' ? 'Connection Failed' : 'Disconnected'}
-                  </span>
-                </div>
-
-                {/* Audio Levels */}
-                <div className="space-y-2">
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-400">You</span>
-                      {isMuted && <MicOff className="w-3 h-3 text-red-500" />}
+            {/* Call Info - Show when initialized (audio ready) - keeps layout after hang up */}
+            {isInitialized && (
+              <div className={`w-full bg-gray-800 rounded-lg p-4 ${showChat && isInCall ? 'lg:flex lg:items-stretch lg:space-x-4 lg:space-y-0' : 'space-y-4'}`}>
+                {/* Left Column - Controls and Audio Levels */}
+                <div className={`space-y-4 ${showChat && isInCall ? 'lg:w-[350px] lg:flex-shrink-0' : 'w-full'}`}>
+                  {/* Connection Status - only show when in call */}
+                  {isInCall && (
+                    <div className="flex items-center justify-center space-x-2">
+                      <div className={`w-2 h-2 ${
+                        connectionState === 'connected' ? 'bg-green-500' :
+                        connectionState === 'connecting' ? 'bg-yellow-500' :
+                        connectionState === 'failed' ? 'bg-red-500' : 'bg-gray-500'
+                      } rounded-full animate-pulse`}></div>
+                      <span className="text-white text-xs">
+                        {connectionState === 'connected' ? 'Connected' :
+                         connectionState === 'connecting' ? 'Connecting...' :
+                         connectionState === 'failed' ? 'Connection Failed' : 'Disconnected'}
+                      </span>
                     </div>
-                    <AudioLevelBar level={isMuted ? 0 : localAudioLevel} />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-400">Partner</span>
+                  )}
+
+                  {/* Audio Levels */}
+                  <div className="space-y-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-400">You</span>
+                        {isMuted && <MicOff className="w-3 h-3 text-red-500" />}
+                      </div>
+                      <AudioLevelBar level={isMuted ? 0 : localAudioLevel} />
                     </div>
-                    <AudioLevelBar level={remoteAudioLevel} />
+                    {/* Partner audio level - only show when in call */}
+                    {isInCall && (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-400">Partner</span>
+                        </div>
+                        <AudioLevelBar level={remoteAudioLevel} />
+                      </div>
+                    )}
                   </div>
-                </div>
 
-                {/* Additional Controls */}
-                <div className="flex items-center justify-center space-x-3">
-                  <button
-                    onClick={onToggleMute}
-                    className={`p-2 rounded-full transition-colors ${
-                      isMuted
-                        ? 'bg-red-600 hover:bg-red-700 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-white'
-                    }`}
-                    title={isMuted ? 'Unmute' : 'Mute'}
-                  >
-                    {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                  </button>
-
-                  <button
-                    onClick={onToggleChat}
-                    className={`p-2 rounded-full transition-colors ${
-                      showChat
-                        ? 'bg-primary-600 hover:bg-primary-700 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-white'
-                    }`}
-                    title="Toggle Chat"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                  </button>
-
-                  {/* Game Button */}
-                  {gameHook && (
+                  {/* Additional Controls */}
+                  <div className="flex items-center justify-center space-x-3">
                     <button
-                      onClick={() => setIsGameOpen(true)}
-                      className={`p-2 rounded-full transition-colors relative ${
-                        gameHook.isPlaying || gameHook.gameStatus === 'invite_received'
-                          ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                      onClick={onToggleMute}
+                      className={`p-2 rounded-full transition-colors ${
+                        isMuted
+                          ? 'bg-red-600 hover:bg-red-700 text-white'
                           : 'bg-gray-700 hover:bg-gray-600 text-white'
                       }`}
-                      title="Play Games"
+                      title={isMuted ? 'Unmute' : 'Mute'}
                     >
-                      <Gamepad2 className="w-4 h-4" />
-                      {/* Notification dot for invite */}
-                      {gameHook.gameStatus === 'invite_received' && (
-                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                      {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </button>
+
+                    <button
+                      onClick={onToggleChat}
+                      className={`p-2 rounded-full transition-colors relative ${
+                        showChat
+                          ? 'bg-primary-600 hover:bg-primary-700 text-white'
+                          : 'bg-gray-700 hover:bg-gray-600 text-white'
+                      }`}
+                      title="Toggle Chat"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      {messages.length > 0 && !showChat && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-xs text-white">
+                          {messages.length > 9 ? '9+' : messages.length}
+                        </span>
                       )}
                     </button>
-                  )}
+
+                    {/* Game Button */}
+                    {gameHook && (
+                      <button
+                        onClick={() => setIsGameOpen(true)}
+                        className={`p-2 rounded-full transition-colors relative ${
+                          gameHook.isPlaying || gameHook.gameStatus === 'invite_received'
+                            ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                            : 'bg-gray-700 hover:bg-gray-600 text-white'
+                        }`}
+                        title="Play Games"
+                      >
+                        <Gamepad2 className="w-4 h-4" />
+                        {/* Notification dot for invite */}
+                        {gameHook.gameStatus === 'invite_received' && (
+                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {/* Chat Panel */}
-                {showChat && (
-                  <div className="border-t border-gray-700 pt-3 mt-3 space-y-2">
-                    <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2">
-                      {messages.map((message, index) => (
-                        <div
-                          key={index}
-                          className={`flex ${message.senderId === partner?.id ? 'justify-start' : 'justify-end'}`}
-                        >
-                          <div
-                            className={`max-w-xs px-2 py-1 rounded text-xs ${
-                              message.senderId === partner?.id
-                                ? 'bg-gray-700 text-white'
-                                : 'bg-primary-600 text-white'
-                            }`}
-                          >
-                            {message.content}
-                          </div>
+                {/* Chat Panel - WhatsApp-like design - only show when in call */}
+                {showChat && isInCall && (
+                  <div className={`border-t border-gray-700 mt-4 lg:border-t-0 lg:mt-0 lg:border-l lg:border-gray-700 lg:pl-4 flex flex-col flex-1 lg:w-[450px] lg:flex-shrink-0`} style={{ minHeight: '500px', maxHeight: 'calc(100vh - 200px)' }}>
+                    {/* Chat Header */}
+                    <div className="px-4 py-3 bg-gray-800/50 border-b border-gray-700 flex items-center justify-between rounded-t-lg">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
+                          <MessageSquare className="w-4 h-4 text-white" />
                         </div>
-                      ))}
+                        <div>
+                          <h3 className="text-white text-sm font-semibold">Chat</h3>
+                          {partner && (
+                            <p className="text-gray-400 text-xs">{getCountryName(partner.country)}</p>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={onToggleChat}
+                        className="text-gray-400 hover:text-white transition-colors p-1 lg:hidden"
+                        title="Close chat"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Messages Area - WhatsApp-like bubbles */}
+                    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 custom-scrollbar bg-gray-900/30">
+                      {messages.length === 0 ? (
+                        <div className="flex items-center justify-center h-full">
+                          <p className="text-gray-500 text-sm">No messages yet. Start the conversation!</p>
+                        </div>
+                      ) : (
+                        messages.map((message, index) => (
+                          <div
+                            key={index}
+                            className={`flex ${message.senderId === partner?.id ? 'justify-start' : 'justify-end'}`}
+                          >
+                            <div
+                              className={`max-w-[75%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl shadow-sm ${
+                                message.senderId === partner?.id
+                                  ? 'bg-gray-700 text-white rounded-tl-sm'
+                                  : 'bg-primary-600 text-white rounded-tr-sm'
+                              }`}
+                            >
+                              <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">
+                                {message.content}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      )}
                       <div ref={messagesEndRef} />
                     </div>
 
-                    <div className="flex space-x-2">
-                      <textarea
-                        value={messageInput}
-                        onChange={(e) => setMessageInput(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        placeholder="Type a message..."
-                        className="flex-1 bg-gray-700 text-white rounded px-2 py-1 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-primary-500"
-                        rows={1}
-                        maxLength={3000}
-                      />
-                      <button
-                        onClick={handleSendMessage}
-                        disabled={!messageInput.trim()}
-                        className="bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 text-white p-1.5 rounded transition-colors"
-                      >
-                        <Send className="w-3 h-3" />
-                      </button>
+                    {/* Input Area - WhatsApp-like */}
+                    <div className="px-4 py-3 bg-gray-800/50 border-t border-gray-700 rounded-b-lg">
+                      <div className="flex items-end space-x-2">
+                        <div className="flex-1 bg-gray-700 rounded-2xl px-4 py-2.5 focus-within:ring-2 focus-within:ring-primary-500 transition-all">
+                          <textarea
+                            value={messageInput}
+                            onChange={(e) => {
+                              setMessageInput(e.target.value)
+                              // Auto-resize textarea
+                              e.target.style.height = 'auto'
+                              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`
+                            }}
+                            onKeyPress={handleKeyPress}
+                            placeholder="Type a message..."
+                            className="w-full bg-transparent text-white placeholder-gray-400 text-sm resize-none focus:outline-none max-h-[120px]"
+                            rows={1}
+                            maxLength={3000}
+                            style={{ minHeight: '24px' }}
+                          />
+                        </div>
+                        <button
+                          onClick={handleSendMessage}
+                          disabled={!messageInput.trim()}
+                          className="bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:opacity-50 text-white p-3 rounded-full transition-all transform hover:scale-105 active:scale-95 disabled:transform-none flex-shrink-0 shadow-lg"
+                          title="Send message"
+                        >
+                          <Send className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2 text-center">
+                        {messageInput.length}/3000 characters
+                      </p>
                     </div>
                   </div>
                 )}

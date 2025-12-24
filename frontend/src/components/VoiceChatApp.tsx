@@ -64,6 +64,16 @@ export function VoiceChatApp() {
       socket.connect()
     }
   }, [socket, isConnected])
+  
+  // Reset loading state when socket reconnects after disconnect
+  useEffect(() => {
+    if (isConnected && !partner && !sessionId) {
+      // Socket reconnected and we're not in a call - reset loading states
+      // But keep isInitialized true to maintain call screen layout
+      setIsLoading(false)
+      setShowFilters(false)
+    }
+  }, [isConnected, partner, sessionId])
 
   // Handle WebRTC signaling - simplified with trickle ICE enabled
   const handleWebRTCMessageCallback = useCallback((message: any) => {
@@ -209,6 +219,8 @@ export function VoiceChatApp() {
       hadPartnerRef.current = false
       peerSessionRef.current = null
       cleanupWebRTC()
+      // Reset loading state but keep isInitialized to maintain call screen layout
+      setIsLoading(false)
     }
   }, [partner, cleanupWebRTC])
 
@@ -256,9 +268,15 @@ export function VoiceChatApp() {
     peerSessionRef.current = null
     endCall()
     cleanupWebRTC()
-    setIsInitialized(false)
+    // Reset loading states but keep isInitialized true to maintain call screen layout
     setIsLoading(false)
     setShowFilters(false)
+    // Force reset by setting a timeout to ensure state clears
+    setTimeout(() => {
+      if (!isUnmountingRef.current) {
+        setIsLoading(false)
+      }
+    }, 200)
   }, [endCall, cleanupWebRTC])
 
   const handleToggleMute = useCallback(() => {

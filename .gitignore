@@ -82,3 +82,9 @@ jspm_packages/
 
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
+
+# SSL certificates (dev-only, should not be committed)
+certs/
+*.pem
+*.key
+*.crt

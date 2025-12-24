@@ -1,5 +1,7 @@
 import express from 'express';
 import { createServer } from 'http';
+import { createServer as createHttpsServer } from 'https';
+import { readFileSync } from 'fs';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -20,21 +22,39 @@ console.log('🚀 Starting Pokytalk backend server...');
 console.log('📋 Environment:', {
   NODE_ENV: process.env.NODE_ENV,
   PORT: process.env.PORT || 3001,
-  CORS_ORIGIN: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000',
+  CORS_ORIGIN: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'https://app.pokytalk.com',
   DEBUG: DEBUG
 });
 
 const app = express();
-const server = createServer(app);
 
-// CORS origin configuration - allow localhost, local network IPs, and AWS Amplify domains
-const isLocalNetworkOrigin = (origin: string | undefined): boolean => {
-  if (!origin) return false;
-  // Allow localhost and local network (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
-  const localNetworkRegex = /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+)(:\d+)?$/;
-  return localNetworkRegex.test(origin);
-};
+// HTTPS support - conditionally enabled via environment variable
+const USE_HTTPS = process.env.USE_HTTPS === 'true';
+let server;
 
+if (USE_HTTPS) {
+  const path = require('path');
+  const keyPath = process.env.SSL_KEY_PATH || path.join(__dirname, '../../certs/key.pem');
+  const certPath = process.env.SSL_CERT_PATH || path.join(__dirname, '../../certs/cert.pem');
+  
+  try {
+    const key = readFileSync(keyPath);
+    const cert = readFileSync(certPath);
+    server = createHttpsServer({ key, cert }, app);
+    console.log('🔒 HTTPS enabled');
+    console.log(`   Key: ${keyPath}`);
+    console.log(`   Cert: ${certPath}`);
+  } catch (error) {
+    console.error('❌ Failed to load SSL certificates:', error);
+    console.error('   Falling back to HTTP');
+    server = createServer(app);
+  }
+} else {
+  server = createServer(app);
+  console.log('🌐 HTTP mode (HTTPS disabled)');
+}
+
+// CORS origin configuration - allow production domains and AWS Amplify domains
 const isAmplifyDomain = (origin: string | undefined): boolean => {
   if (!origin) return false;
   // Allow AWS Amplify domains (amplifyapp.com) and App Runner domains
@@ -59,10 +79,9 @@ const getCorsOrigin = () => {
       callback(null, true);
       return;
     }
-    // Allow if it matches frontend URL, local network, Amplify/AppRunner domain, or custom domain
+    // Allow if it matches frontend URL, Amplify/AppRunner domain, or custom domain
     const allowed = 
       (frontendUrl && origin === frontendUrl) ||
-      isLocalNetworkOrigin(origin) || 
       isAmplifyDomain(origin) ||
       isCustomDomain(origin);
     
@@ -72,7 +91,7 @@ const getCorsOrigin = () => {
 };
 
 const corsOrigin = getCorsOrigin();
-console.log('🔧 Socket.io configured with CORS origin:', process.env.FRONTEND_URL || 'local network + AWS Amplify domains');
+console.log('🔧 Socket.io configured with CORS origin:', process.env.FRONTEND_URL || 'production domains + AWS Amplify');
 
 // Configure Socket.io with detailed logging
 const io = new Server(server, {
@@ -156,11 +175,12 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 const HOST = process.env.HOST || '0.0.0.0'; // Listen on all interfaces for network access
 
 server.listen(PORT, HOST, () => {
+  const protocol = USE_HTTPS ? 'https' : 'http';
+  const wsProtocol = USE_HTTPS ? 'wss' : 'ws';
   console.log(`🚀 Pokytalk backend server running on ${HOST}:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
+  console.log(`📊 Health check: ${protocol}://${HOST}:${PORT}/health`);
+  console.log(`🔌 WebSocket: ${wsProtocol}://${HOST}:${PORT}`);
   console.log('✅ Server startup completed');
-  console.log('🌐 Accessible from network devices!');
 });
 
 // Graceful shutdown

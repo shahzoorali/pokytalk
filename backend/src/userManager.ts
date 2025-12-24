@@ -5,6 +5,9 @@ import { User, UserFilters } from './types';
 export class UserManager {
   private users: Map<string, User> = new Map();
   private waitingQueue: string[] = [];
+  // Track recent matches to prevent same users from matching again immediately
+  private recentMatches: Map<string, Set<string>> = new Map(); // userId -> Set of recently matched user IDs
+  private readonly MATCH_COOLDOWN_MS = 1000; // 1 second cooldown (for testing - set to 5 * 60 * 1000 for production)
 
   createUser(socketId: string, age?: number, country?: string): User {
     const user: User = {
@@ -87,12 +90,52 @@ export class UserManager {
   }
 
   getRandomPartner(userId: string, filters?: UserFilters): User | undefined {
-    const availableUsers = this.getWaitingUsers(filters).filter(id => id !== userId);
+    // Get available users excluding self and recently matched users
+    const availableUsers = this.getWaitingUsers(filters).filter(id => {
+      if (id === userId) return false; // Can't match with self
+      
+      // Check if this user was recently matched
+      const recentMatches = this.recentMatches.get(userId);
+      if (recentMatches && recentMatches.has(id)) {
+        return false; // Skip recently matched users
+      }
+      
+      return true;
+    });
+    
     if (availableUsers.length === 0) return undefined;
 
     const randomIndex = Math.floor(Math.random() * availableUsers.length);
     const partnerId = availableUsers[randomIndex];
     return this.users.get(partnerId);
+  }
+  
+  // Record a match between two users
+  recordMatch(user1Id: string, user2Id: string): void {
+    // Add to recent matches for both users
+    if (!this.recentMatches.has(user1Id)) {
+      this.recentMatches.set(user1Id, new Set());
+    }
+    if (!this.recentMatches.has(user2Id)) {
+      this.recentMatches.set(user2Id, new Set());
+    }
+    
+    this.recentMatches.get(user1Id)!.add(user2Id);
+    this.recentMatches.get(user2Id)!.add(user1Id);
+    
+    // Remove from recent matches after cooldown period
+    setTimeout(() => {
+      this.recentMatches.get(user1Id)?.delete(user2Id);
+      this.recentMatches.get(user2Id)?.delete(user1Id);
+      
+      // Clean up empty sets
+      if (this.recentMatches.get(user1Id)?.size === 0) {
+        this.recentMatches.delete(user1Id);
+      }
+      if (this.recentMatches.get(user2Id)?.size === 0) {
+        this.recentMatches.delete(user2Id);
+      }
+    }, this.MATCH_COOLDOWN_MS);
   }
 
   getAllUsers(): User[] {

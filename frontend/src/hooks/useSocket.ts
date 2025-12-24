@@ -4,17 +4,27 @@ import { User, UserFilters, WebRTCMessage, ChatMessage, ServerStats } from '@/ty
 
 // Dynamic backend URL detection - use same hostname as frontend
 const getBackendUrl = (): string => {
-  // If explicitly set via environment variable, use it
-  if (process.env.NEXT_PUBLIC_BACKEND_URL) {
-    return process.env.NEXT_PUBLIC_BACKEND_URL
-  }
-  
-  // In browser, use current hostname (works for localhost, IP addresses, and domains)
+  // In browser, check if we're in local development first
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
     
-    // Custom domain mapping: pokytalk.com -> app.pokytalk.com
+    // Local development: localhost, 127.0.0.1, or local IP addresses (192.168.x.x, 10.x.x.x, etc.)
+    const isLocalDev = 
+      hostname === 'localhost' || 
+      hostname === '127.0.0.1' || 
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      hostname.startsWith('172.') ||
+      hostname === 'SHAHZOORDESKTOP' ||
+      hostname.match(/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) // Any IP address
+    
+    if (isLocalDev) {
+      // For local development, always use same hostname with port 3001
+      return `${protocol}//${hostname}:3001`
+    }
+    
+    // Production domain mapping: pokytalk.com -> app.pokytalk.com
     if (hostname === 'pokytalk.com' || hostname === 'www.pokytalk.com') {
       return `${protocol}//app.pokytalk.com`
     }
@@ -24,7 +34,12 @@ const getBackendUrl = (): string => {
       return `${protocol}//app.pokytalk.com`
     }
     
-    // For localhost or other domains, use same hostname with port 3001
+    // If NEXT_PUBLIC_BACKEND_URL is explicitly set and we're not in local dev, use it
+    if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+      return process.env.NEXT_PUBLIC_BACKEND_URL
+    }
+    
+    // Fallback: use same hostname with port 3001
     return `${protocol}//${hostname}:3001`
   }
   
@@ -33,6 +48,39 @@ const getBackendUrl = (): string => {
 }
 
 const BACKEND_URL = getBackendUrl()
+
+// Detect country using IP geolocation API
+async function detectCountry(): Promise<string | undefined> {
+  try {
+    // Use free IP geolocation API (ipapi.co)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 3000)
+    
+    const response = await fetch('https://ipapi.co/json/', { 
+      signal: controller.signal 
+    })
+    clearTimeout(timeoutId)
+    
+    const data = await response.json()
+    if (data?.country_code) {
+      console.log(`🌍 Detected country from IP: ${data.country_code}`)
+      return data.country_code
+    }
+  } catch (e) {
+    console.log('Could not detect country from IP geolocation:', e)
+  }
+
+  // Fallback: Try to get from timezone (less accurate but works offline)
+  try {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    // Some timezones contain country info, but this is unreliable
+    // Just return undefined if IP detection fails
+  } catch (e) {
+    // ignore
+  }
+
+  return undefined
+}
 
 export function useSocket() {
   const [socket, setSocket] = useState<Socket | null>(null)
@@ -52,12 +100,14 @@ export function useSocket() {
       withCredentials: true,
     })
 
-    newSocket.on('connect', () => {
+    newSocket.on('connect', async () => {
       setIsConnected(true)
       console.log('Connected to server')
+      // Detect country before connecting user
+      const country = await detectCountry()
       // Automatically connect user when socket connects
-      console.log('Emitting user:connect event')
-      newSocket.emit('user:connect', {})
+      console.log('Emitting user:connect event', country ? `with country: ${country}` : 'without country')
+      newSocket.emit('user:connect', country ? { country } : {})
     })
 
     newSocket.on('disconnect', () => {
@@ -101,6 +151,7 @@ export function useSocket() {
       setPartner(null)
       setSessionId(null)
       setMessages([])
+      setIsWaiting(false) // Reset waiting state when call ends
       console.log('Call ended')
     })
 

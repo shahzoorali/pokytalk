@@ -5,8 +5,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
+    "dev:https": "node server.js",
     "build": "next build",
     "start": "next start -H 0.0.0.0",
+    "start:https": "NODE_ENV=production node server.js",
     "lint": "next lint"
   },
   "dependencies": {

@@ -91,6 +91,9 @@ export class SocketManager {
         if (partner) {
           console.log(`🎯 Found partner for ${userId}: ${partner.id}`);
           
+          // Record the match to prevent same users from matching again
+          this.userManager.recordMatch(userId, partner.id);
+          
           // Remove both users from queue
           this.userManager.removeFromQueue(userId);
           this.userManager.removeFromQueue(partner.id);
@@ -156,6 +159,9 @@ export class SocketManager {
           
           this.callManager.endSession(session.id);
           
+          // Notify both users about call end
+          socket.emit('call:ended', session.id); // Notify the user who initiated the hang up
+          
           // Notify partner
           const partner = this.userManager.getUser(user.partnerId);
           if (partner) {
@@ -167,6 +173,8 @@ export class SocketManager {
           }
         } else {
           console.error(`❌ Session not found for user: ${userId}`);
+          // Even if no session, still notify the user to clear their state
+          socket.emit('call:ended', '');
         }
 
         // Update user state

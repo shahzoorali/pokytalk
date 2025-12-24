@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Microphone Permission Check</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background: #2d5016; }
+        .error { background: #5a1a1a; }
+        .info { background: #1a3a5a; }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #45a049; }
+        button.danger { background: #f44336; }
+        button.danger:hover { background: #da190b; }
+        code {
+            background: #2a2a2a;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎤 Microphone Permission Checker</h1>
+    
+    <div id="status"></div>
+    
+    <div>
+        <button onclick="checkPermission()">Check Permission Status</button>
+        <button onclick="requestPermission()">Request Microphone Access</button>
+        <button onclick="openSettings()" class="danger">Open Browser Settings</button>
+    </div>
+    
+    <div id="info" class="status info" style="margin-top: 20px; display: none;">
+        <h3>Permission Status:</h3>
+        <pre id="permissionInfo"></pre>
+    </div>
+
+    <script>
+        async function checkPermission() {
+            const statusDiv = document.getElementById('status');
+            const infoDiv = document.getElementById('info');
+            const infoPre = document.getElementById('permissionInfo');
+            
+            try {
+                // Check if getUserMedia is available
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    statusDiv.innerHTML = '<div class="status error">❌ getUserMedia is not available. This might not be a secure context (HTTPS required).</div>';
+                    return;
+                }
+                
+                // Check permission status
+                const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
+                
+                let status = '';
+                let statusClass = '';
+                
+                switch(permissionStatus.state) {
+                    case 'granted':
+                        status = '✅ Microphone permission is GRANTED';
+                        statusClass = 'success';
+                        break;
+                    case 'denied':
+                        status = '❌ Microphone permission is DENIED';
+                        statusClass = 'error';
+                        break;
+                    case 'prompt':
+                        status = '⚠️ Microphone permission is PROMPT (not set yet)';
+                        statusClass = 'info';
+                        break;
+                    default:
+                        status = '❓ Unknown permission state';
+                        statusClass = 'info';
+                }
+                
+                statusDiv.innerHTML = `<div class="status ${statusClass}">${status}</div>`;
+                
+                // Show detailed info
+                infoPre.textContent = JSON.stringify({
+                    state: permissionStatus.state,
+                    onchange: 'available',
+                    getUserMedia: 'available',
+                    secureContext: window.isSecureContext,
+                    protocol: window.location.protocol,
+                    hostname: window.location.hostname
+                }, null, 2);
+                infoDiv.style.display = 'block';
+                
+                // Listen for permission changes
+                permissionStatus.onchange = () => {
+                    checkPermission();
+                };
+                
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Error checking permission: ${error.message}</div>`;
+                console.error('Permission check error:', error);
+            }
+        }
+        
+        async function requestPermission() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = '<div class="status info">🎤 Requesting microphone access... Check for browser prompt!</div>';
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                statusDiv.innerHTML = '<div class="status success">✅ Microphone access granted! Stream obtained successfully.</div>';
+                
+                // Stop the stream immediately (we just wanted to test permission)
+                stream.getTracks().forEach(track => track.stop());
+                
+                // Recheck permission status
+                setTimeout(checkPermission, 500);
+            } catch (error) {
+                let errorMsg = '';
+                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    errorMsg = '❌ Permission DENIED. Click "Open Browser Settings" button below to grant permission.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMsg = '❌ No microphone found. Please connect a microphone.';
+                } else {
+                    errorMsg = `❌ Error: ${error.name} - ${error.message}`;
+                }
+                statusDiv.innerHTML = `<div class="status error">${errorMsg}</div>`;
+            }
+        }
+        
+        function openSettings() {
+            // Try to open browser settings
+            const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+            const port = window.location.port;
+            const fullUrl = `${protocol}//${hostname}${port ? ':' + port : ''}`;
+            
+            alert(`To grant microphone permission:\n\n` +
+                  `1. Copy this URL: ${fullUrl}\n\n` +
+                  `2. Open a new tab and paste: chrome://settings/content/microphone\n\n` +
+                  `3. Or click the lock icon in the address bar\n\n` +
+                  `4. Find "Microphone" and change to "Allow"`);
+            
+            // Try to open settings page (may not work in all browsers)
+            try {
+                window.open('chrome://settings/content/microphone', '_blank');
+            } catch (e) {
+                console.log('Could not open settings directly');
+            }
+        }
+        
+        // Auto-check on load
+        window.addEventListener('load', () => {
+            checkPermission();
+        });
+    </script>
+</body>
+</html>
+
