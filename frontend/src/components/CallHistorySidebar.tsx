@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { X, History, Phone, Trash2 } from 'lucide-react'
 import { CallHistoryEntry } from '@/types'
 import { Flag } from './Flag'
@@ -26,15 +26,30 @@ export function CallHistorySidebar({
   onClearHistory,
 }: CallHistorySidebarProps) {
   const [isRequesting, setIsRequesting] = useState<string | null>(null)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
 
   const handleRequestCallback = async (entry: CallHistoryEntry) => {
     if (isRequesting) return
+    
+    // Clear previous timeout if exists
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
     
     setIsRequesting(entry.partnerId)
     try {
       onRequestCallback(entry.partnerId, entry.timestamp, entry.country)
       // Reset after a short delay
-      setTimeout(() => setIsRequesting(null), 1000)
+      timeoutRef.current = setTimeout(() => setIsRequesting(null), 1000)
     } catch (error) {
       console.error('Failed to request callback:', error)
       setIsRequesting(null)
@@ -43,6 +58,9 @@ export function CallHistorySidebar({
 
   const isOnline = (partnerId: string) => onlineUsers.has(partnerId)
   const isBlocked = (partnerId: string) => blockedUsers.includes(partnerId)
+
+  // Filter out blocked users from history display
+  const filteredHistory = history.filter(entry => !isBlocked(entry.partnerId))
 
   return (
     <>
@@ -78,7 +96,7 @@ export function CallHistorySidebar({
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto custom-scrollbar">
-            {history.length === 0 ? (
+            {filteredHistory.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full p-8 text-center">
                 <History className="w-12 h-12 text-gray-600 mb-4" />
                 <p className="text-gray-400 text-sm">No call history yet</p>
@@ -88,10 +106,9 @@ export function CallHistorySidebar({
               </div>
             ) : (
               <div className="p-4 space-y-2">
-                {history.map((entry) => {
+                {filteredHistory.map((entry) => {
                   const online = isOnline(entry.partnerId)
-                  const blocked = isBlocked(entry.partnerId)
-                  const canCallback = online && !blocked
+                  const canCallback = online
 
                   return (
                     <div
@@ -138,9 +155,7 @@ export function CallHistorySidebar({
                               : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                           }`}
                           title={
-                            blocked
-                              ? 'User is blocked'
-                              : !online
+                            !online
                               ? 'User is offline'
                               : 'Request callback'
                           }
@@ -163,7 +178,7 @@ export function CallHistorySidebar({
           </div>
 
           {/* Footer */}
-          {history.length > 0 && (
+          {filteredHistory.length > 0 && (
             <div className="p-4 border-t border-gray-700">
               <button
                 onClick={onClearHistory}

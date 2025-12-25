@@ -293,7 +293,11 @@ export function useSocket() {
     // Online status tracking for call history
     newSocket.on('user:online', (userId: string) => {
       console.log('👤 User online:', userId)
-      setOnlineUsers(prev => new Set([...prev, userId]))
+      setOnlineUsers(prev => {
+        const updated = new Set(prev)
+        updated.add(userId)
+        return updated
+      })
     })
 
     newSocket.on('user:offline', (userId: string) => {

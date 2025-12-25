@@ -5,6 +5,7 @@ export class CallbackManager {
   private requests: Map<string, CallbackRequest> = new Map(); // requestId -> CallbackRequest
   private userRequests: Map<string, Set<string>> = new Map(); // userId -> Set of requestIds (requests they sent)
   private userReceivedRequests: Map<string, Set<string>> = new Map(); // userId -> Set of requestIds (requests they received)
+  private requestTimeouts: Map<string, NodeJS.Timeout> = new Map(); // requestId -> timeout
   private readonly REQUEST_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
   /**
@@ -41,7 +42,7 @@ export class CallbackManager {
     this.userReceivedRequests.get(toUserId)!.add(requestId);
 
     // Set timeout to expire request after 5 minutes
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       const req = this.requests.get(requestId);
       if (req && req.status === 'pending') {
         req.status = 'expired';
@@ -51,7 +52,10 @@ export class CallbackManager {
           this.removeRequest(requestId);
         }, 60000); // Keep expired requests for 1 minute for reference
       }
+      this.requestTimeouts.delete(requestId);
     }, this.REQUEST_TIMEOUT_MS);
+    
+    this.requestTimeouts.set(requestId, timeoutId);
 
     return request;
   }
@@ -151,6 +155,13 @@ export class CallbackManager {
   private removeRequest(requestId: string): void {
     const request = this.requests.get(requestId);
     if (!request) return;
+
+    // Clear timeout if exists
+    const timeout = this.requestTimeouts.get(requestId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.requestTimeouts.delete(requestId);
+    }
 
     // Remove from user tracking
     const fromRequests = this.userRequests.get(request.fromUserId);

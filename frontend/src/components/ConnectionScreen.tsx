@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Phone, Users, Globe, ChevronDown, ChevronUp, Mic, MicOff, MessageSquare, X, Send, Search, Gamepad2, Flag as FlagIcon, ShieldOff, History } from 'lucide-react'
-import { ServerStats, UserFilters, User, ChatMessage, ReportUserData } from '@/types'
+import { ServerStats, UserFilters, User, ChatMessage, ReportUserData, CallHistoryEntry } from '@/types'
 import { AudioLevelBar } from './AudioLevelBar'
 import { Flag } from './Flag'
 import { HangmanGame } from './HangmanGame'
@@ -14,7 +14,6 @@ import { BlockDialog } from './BlockDialog'
 import { NotificationModal } from './NotificationModal'
 import { CallHistorySidebar } from './CallHistorySidebar'
 import { CallbackRequestModal } from './CallbackRequestModal'
-import { useCallHistory } from '@/hooks/useCallHistory'
 
 interface ConnectionScreenProps {
   onStartCall: (filters?: UserFilters) => void

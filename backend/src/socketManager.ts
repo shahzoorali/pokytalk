@@ -384,6 +384,23 @@ export class SocketManager {
         // Block the user
         this.moderationManager.blockUser(userId, blockedUserId);
 
+        // Cancel all pending callback requests involving this user
+        const allRequests = this.callbackManager.getAllUserRequests(userId);
+        allRequests.forEach(req => {
+          if ((req.fromUserId === userId && req.toUserId === blockedUserId) ||
+              (req.fromUserId === blockedUserId && req.toUserId === userId)) {
+            this.callbackManager.cancelRequest(req.id);
+            // Notify the other user if they're online
+            const otherUserId = req.fromUserId === userId ? req.toUserId : req.fromUserId;
+            const otherUser = this.userManager.getUser(otherUserId);
+            if (otherUser) {
+              this.io.to(otherUser.socketId).emit('callback:request:cancelled', {
+                requestId: req.id
+              });
+            }
+          }
+        });
+
         // If in a call, end it
         const user = this.userManager.getUser(userId);
         if (user && user.partnerId === blockedUserId) {
@@ -433,6 +450,23 @@ export class SocketManager {
 
         const { toUserId, originalCallTimestamp, originalCallCountry } = data;
         
+        // Validate toUserId
+        if (!toUserId || typeof toUserId !== 'string' || toUserId.trim() === '') {
+          socket.emit('callback:request:error', { message: 'Invalid user ID' });
+          return;
+        }
+
+        // Validate and sanitize originalCallTimestamp
+        let validatedTimestamp: Date | undefined;
+        if (originalCallTimestamp) {
+          const date = new Date(originalCallTimestamp);
+          const now = new Date();
+          // Only accept past dates, within reasonable range (last year)
+          if (!isNaN(date.getTime()) && date < now && date > new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)) {
+            validatedTimestamp = date;
+          }
+        }
+        
         // Validate target user exists
         const targetUser = this.userManager.getUser(toUserId);
         if (!targetUser) {
@@ -454,7 +488,65 @@ export class SocketManager {
           return;
         }
 
-        // Check for mutual callback (both users requesting callback to each other)
+        // Check for mutual callback FIRST (before creating new request)
+        // Check if reverse request already exists
+        const reverseRequests = this.callbackManager.getPendingRequestsSent(toUserId);
+        const existingReverseRequest = reverseRequests.find(req => req.toUserId === userId);
+        
+        if (existingReverseRequest) {
+          // Mutual callback detected - auto-match immediately
+          console.log(`🤝 Mutual callback detected between ${userId} and ${toUserId}`);
+          
+          // Create call session immediately
+          const session = this.callManager.createSession(userId, toUserId);
+          if (!session) {
+            socket.emit('callback:request:error', { message: 'Failed to create call session' });
+            return;
+          }
+
+          // Update user states
+          this.userManager.updateUser(userId, { isInCall: true, partnerId: toUserId });
+          this.userManager.updateUser(toUserId, { isInCall: true, partnerId: userId });
+
+          // Remove both users from queue
+          this.userManager.removeFromQueue(userId);
+          this.userManager.removeFromQueue(toUserId);
+
+          // Get user objects for matching
+          const user1 = this.userManager.getUser(userId);
+          const user2 = this.userManager.getUser(toUserId);
+
+          if (user1 && user2) {
+            // Determine initiator (use userId comparison for consistency)
+            const initiatorId = userId < toUserId ? userId : toUserId;
+            
+            // Notify both users
+            this.io.to(user1.socketId).emit('callback:mutual', {
+              partner: user2,
+              sessionId: session.id,
+              initiatorId
+            });
+            this.io.to(user2.socketId).emit('callback:mutual', {
+              partner: user1,
+              sessionId: session.id,
+              initiatorId
+            });
+
+            // Also emit call:matched for compatibility
+            this.io.to(user1.socketId).emit('call:matched', user2, session.id, initiatorId);
+            this.io.to(user2.socketId).emit('call:matched', user1, session.id, initiatorId);
+
+            // Record match in stats
+            this.statsManager.incrementTotalSessions();
+          }
+
+          // Cancel the existing reverse request
+          this.callbackManager.cancelRequest(existingReverseRequest.id);
+
+          return;
+        }
+
+        // Check for mutual callback using the manager method (for backward compatibility)
         const mutualRequest = this.callbackManager.checkMutualCallback(userId, toUserId);
         if (mutualRequest) {
           // Auto-match - both users want to call each other
@@ -500,7 +592,7 @@ export class SocketManager {
             this.io.to(user2.socketId).emit('call:matched', user1, session.id, initiatorId);
 
             // Record match in stats
-            this.statsManager.recordMatch(user1.country || 'Unknown', user2.country || 'Unknown');
+            this.statsManager.incrementTotalSessions();
           }
 
           // Clean up mutual requests
@@ -523,7 +615,7 @@ export class SocketManager {
         // Check if target user is in a call
         if (targetUser.isInCall) {
           // Queue the callback request - we'll notify when they become available
-          const request = this.callbackManager.createRequest(userId, toUserId, originalCallTimestamp, originalCallCountry);
+          const request = this.callbackManager.createRequest(userId, toUserId, validatedTimestamp, originalCallCountry);
           socket.emit('callback:request:queued', {
             requestId: request.id,
             message: 'User is currently in a call. You will be notified when they become available.'
@@ -532,7 +624,7 @@ export class SocketManager {
         }
 
         // Create callback request
-        const request = this.callbackManager.createRequest(userId, toUserId, originalCallTimestamp, originalCallCountry);
+        const request = this.callbackManager.createRequest(userId, toUserId, validatedTimestamp, originalCallCountry);
         
         // Notify requester
         socket.emit('callback:request:sent', {
@@ -577,6 +669,13 @@ export class SocketManager {
         // Verify request is still pending
         if (request.status !== 'pending') {
           socket.emit('callback:accept:error', { message: 'Request already processed' });
+          return;
+        }
+
+        // Re-check block status (users might have blocked each other since request was sent)
+        if (this.moderationManager.isBlocked(userId, request.fromUserId) ||
+            this.moderationManager.isBlocked(request.fromUserId, userId)) {
+          socket.emit('callback:accept:error', { message: 'Cannot accept callback' });
           return;
         }
 
@@ -644,7 +743,7 @@ export class SocketManager {
           this.io.to(accepter.socketId).emit('call:matched', requester, session.id, initiatorId);
 
           // Record match in stats
-          this.statsManager.recordMatch(requester.country || 'Unknown', accepter.country || 'Unknown');
+          this.statsManager.incrementTotalSessions();
         }
       });
 
