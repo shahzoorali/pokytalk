@@ -121,3 +121,60 @@ export interface HangmanGameUpdate {
   event: 'word_set' | 'guess_result' | 'game_ended';
 }
 
+// Moderation Types
+export type ReportReason = 
+  | 'harassment' 
+  | 'inappropriate_content' 
+  | 'spam' 
+  | 'scam' 
+  | 'personal_info_request' 
+  | 'other';
+
+export interface UserReport {
+  id: string;
+  reporterId: string;
+  reportedUserId: string;
+  reason: ReportReason;
+  description?: string;
+  sessionId?: string;
+  timestamp: Date;
+  reviewed: boolean;
+  actionTaken?: 'warning' | 'suspension' | 'ban' | 'none';
+}
+
+export interface BlockedUser {
+  blockerId: string;
+  blockedUserId: string;
+  timestamp: Date;
+}
+
+export interface ReportUserData {
+  reportedUserId: string;
+  reason: ReportReason;
+  description?: string;
+  sessionId?: string;
+}
+
+// Call History and Callback Types
+export interface CallbackRequestData {
+  toUserId: string;
+  originalCallTimestamp?: Date;
+  originalCallCountry?: string;
+}
+
+export interface CallbackRequest {
+  id: string;
+  fromUserId: string;
+  toUserId: string;
+  timestamp: Date;
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
+  originalCallTimestamp?: Date;
+  originalCallCountry?: string;
+}
+
+export interface CallbackRequestResponse {
+  requestId: string;
+  status: 'accepted' | 'declined' | 'expired';
+  message?: string;
+}
+

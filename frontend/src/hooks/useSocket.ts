@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
-import { User, UserFilters, WebRTCMessage, ChatMessage, ServerStats } from '@/types'
+import { User, UserFilters, WebRTCMessage, ChatMessage, ServerStats, ReportUserData } from '@/types'
 
 // Dynamic backend URL detection - use same hostname as frontend
 const getBackendUrl = (): string => {
@@ -92,10 +92,54 @@ export function useSocket() {
   const [partner, setPartner] = useState<User | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [blockedUsers, setBlockedUsers] = useState<string[]>([])
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
+  const [incomingCallbackRequest, setIncomingCallbackRequest] = useState<{
+    requestId: string
+    fromUserId: string
+    fromCountry?: string
+    originalCallTimestamp?: Date
+    originalCallCountry?: string
+  } | null>(null)
   
   // Preserve call state during disconnection
   const preservedPartnerRef = useRef<User | null>(null)
   const preservedSessionIdRef = useRef<string | null>(null)
+  
+  // Callbacks for moderation events (set by components)
+  const moderationCallbacksRef = useRef<{
+    onReportSuccess?: (message: string) => void
+    onReportError?: (error: string) => void
+    onBlockSuccess?: (message: string) => void
+    onBlockError?: (error: string) => void
+    onSuspiciousBehavior?: (data: { message: string; reasons: string[] }) => void
+    onModerationWarning?: (message: string) => void
+    onChatError?: (message: string) => void
+  }>({})
+  
+  // Callbacks for callback request events (set by components)
+  const callbackCallbacksRef = useRef<{
+    onCallbackRequestReceived?: (data: {
+      requestId: string
+      fromUserId: string
+      fromCountry?: string
+      originalCallTimestamp?: Date
+      originalCallCountry?: string
+    }) => void
+    onCallbackRequestAccepted?: (data: {
+      requestId: string
+      partner: User
+      sessionId: string
+      initiatorId: string
+    }) => void
+    onCallbackRequestDeclined?: (data: { requestId: string; message: string }) => void
+    onCallbackRequestExpired?: (data: { requestId: string }) => void
+    onCallbackMutual?: (data: {
+      partner: User
+      sessionId: string
+      initiatorId: string
+    }) => void
+  }>({})
 
   useEffect(() => {
     console.log('Attempting to connect to:', BACKEND_URL)
@@ -178,6 +222,23 @@ export function useSocket() {
     newSocket.on('user:connect', (userData: User) => {
       console.log('Received user:connect response:', userData)
       setUser(userData)
+      // Add user to online users
+      setOnlineUsers(prev => new Set(prev).add(userData.id))
+    })
+
+    // Track online/offline status for call history
+    newSocket.on('user:online', (userId: string) => {
+      console.log('👤 User online:', userId)
+      setOnlineUsers(prev => new Set(prev).add(userId))
+    })
+
+    newSocket.on('user:offline', (userId: string) => {
+      console.log('👤 User offline:', userId)
+      setOnlineUsers(prev => {
+        const updated = new Set(prev)
+        updated.delete(userId)
+        return updated
+      })
     })
 
     newSocket.on('call:waiting', () => {
@@ -229,12 +290,179 @@ export function useSocket() {
       setStats(statsData)
     })
 
+    // Online status tracking for call history
+    newSocket.on('user:online', (userId: string) => {
+      console.log('👤 User online:', userId)
+      setOnlineUsers(prev => new Set([...prev, userId]))
+    })
+
+    newSocket.on('user:offline', (userId: string) => {
+      console.log('👤 User offline:', userId)
+      setOnlineUsers(prev => {
+        const updated = new Set(prev)
+        updated.delete(userId)
+        return updated
+      })
+    })
+
     newSocket.on('error', (message: string) => {
       console.error('Socket error:', message)
     })
 
     newSocket.on('connect_error', (error) => {
       console.error('Socket connection error:', error)
+    })
+
+    // Moderation event listeners
+    newSocket.on('user:report:success', (data: { message: string; reportId: string }) => {
+      console.log('✅ Report submitted successfully:', data)
+      moderationCallbacksRef.current.onReportSuccess?.(data.message)
+    })
+
+    newSocket.on('user:report:error', (error: string) => {
+      console.error('❌ Report error:', error)
+      moderationCallbacksRef.current.onReportError?.(error)
+    })
+
+    newSocket.on('user:block:success', (data: { message: string; blockedUserId: string }) => {
+      console.log('✅ User blocked successfully:', data)
+      setBlockedUsers(prev => {
+        if (!prev.includes(data.blockedUserId)) {
+          return [...prev, data.blockedUserId]
+        }
+        return prev
+      })
+      moderationCallbacksRef.current.onBlockSuccess?.(data.message)
+    })
+
+    newSocket.on('user:block:error', (error: string) => {
+      console.error('❌ Block error:', error)
+      moderationCallbacksRef.current.onBlockError?.(error)
+    })
+
+    newSocket.on('user:unblock:success', (data: { unblockedUserId: string }) => {
+      console.log('✅ User unblocked successfully:', data)
+      setBlockedUsers(prev => prev.filter(id => id !== data.unblockedUserId))
+    })
+
+    newSocket.on('user:blocked:list', (blockedUserIds: string[]) => {
+      console.log('📋 Blocked users list:', blockedUserIds)
+      setBlockedUsers(blockedUserIds)
+    })
+
+    newSocket.on('moderation:suspicious', (data: { message: string; reasons: string[] }) => {
+      console.warn('⚠️ Suspicious behavior detected:', data)
+      moderationCallbacksRef.current.onSuspiciousBehavior?.(data)
+    })
+
+    newSocket.on('moderation:warning', (data: { message: string; reportCount?: number }) => {
+      console.warn('⚠️ Moderation warning:', data)
+      moderationCallbacksRef.current.onModerationWarning?.(data.message)
+    })
+
+    newSocket.on('chat:error', (message: string) => {
+      console.error('❌ Chat error:', message)
+      moderationCallbacksRef.current.onChatError?.(message)
+    })
+
+    // Callback request event listeners
+    newSocket.on('callback:request:received', (data: {
+      requestId: string
+      fromUserId: string
+      fromCountry?: string
+      originalCallTimestamp?: string
+      originalCallCountry?: string
+    }) => {
+      console.log('📞 Callback request received:', data)
+      const requestData = {
+        ...data,
+        originalCallTimestamp: data.originalCallTimestamp ? new Date(data.originalCallTimestamp) : undefined
+      }
+      setIncomingCallbackRequest(requestData)
+      callbackCallbacksRef.current.onCallbackRequestReceived?.(requestData)
+    })
+
+    newSocket.on('callback:request:accepted', (data: {
+      requestId: string
+      partner: User
+      sessionId: string
+      initiatorId: string
+    }) => {
+      console.log('✅ Callback request accepted:', data)
+      setIncomingCallbackRequest(null)
+      setPartner(data.partner)
+      setSessionId(data.sessionId)
+      preservedPartnerRef.current = data.partner
+      preservedSessionIdRef.current = data.sessionId
+      setIsWaiting(false)
+      // Store initiatorId on socket instance
+      // @ts-expect-error augment runtime value
+      newSocket.__webrtcInitiatorId = data.initiatorId
+      callbackCallbacksRef.current.onCallbackRequestAccepted?.(data)
+    })
+
+    newSocket.on('callback:request:declined', (data: { requestId: string; message: string }) => {
+      console.log('❌ Callback request declined:', data)
+      setIncomingCallbackRequest(null)
+      callbackCallbacksRef.current.onCallbackRequestDeclined?.(data)
+    })
+
+    newSocket.on('callback:request:expired', (data: { requestId: string }) => {
+      console.log('⏰ Callback request expired:', data)
+      setIncomingCallbackRequest(null)
+      callbackCallbacksRef.current.onCallbackRequestExpired?.(data)
+    })
+
+    newSocket.on('callback:mutual', (data: {
+      partner: User
+      sessionId: string
+      initiatorId: string
+    }) => {
+      console.log('🤝 Mutual callback detected:', data)
+      setPartner(data.partner)
+      setSessionId(data.sessionId)
+      preservedPartnerRef.current = data.partner
+      preservedSessionIdRef.current = data.sessionId
+      setIsWaiting(false)
+      // Store initiatorId on socket instance
+      // @ts-expect-error augment runtime value
+      newSocket.__webrtcInitiatorId = data.initiatorId
+      callbackCallbacksRef.current.onCallbackMutual?.(data)
+    })
+
+    newSocket.on('callback:request:queued', (data: { requestId: string; message: string }) => {
+      console.log('⏳ Callback request queued:', data)
+    })
+
+    newSocket.on('callback:request:available', (data: { requestId: string; message: string }) => {
+      console.log('✅ Callback target is now available:', data)
+    })
+
+    newSocket.on('callback:request:sent', (data: { requestId: string; message: string }) => {
+      console.log('📤 Callback request sent:', data)
+    })
+
+    newSocket.on('callback:request:cancelled', (data: { requestId: string }) => {
+      console.log('🚫 Callback request cancelled:', data)
+      if (incomingCallbackRequest?.requestId === data.requestId) {
+        setIncomingCallbackRequest(null)
+      }
+    })
+
+    newSocket.on('callback:request:error', (data: { message: string }) => {
+      console.error('❌ Callback request error:', data)
+    })
+
+    newSocket.on('callback:accept:error', (data: { message: string }) => {
+      console.error('❌ Callback accept error:', data)
+    })
+
+    newSocket.on('callback:decline:error', (data: { message: string }) => {
+      console.error('❌ Callback decline error:', data)
+    })
+
+    newSocket.on('callback:cancel:error', (data: { message: string }) => {
+      console.error('❌ Callback cancel error:', data)
     })
 
     setSocket(newSocket)
@@ -292,6 +520,74 @@ export function useSocket() {
     }
   }
 
+  const reportUser = useCallback((data: ReportUserData) => {
+    if (socket) {
+      socket.emit('user:report', data)
+    }
+  }, [socket])
+
+  const blockUser = useCallback((blockedUserId: string) => {
+    if (socket) {
+      socket.emit('user:block', blockedUserId)
+    }
+  }, [socket])
+
+  const unblockUser = useCallback((unblockedUserId: string) => {
+    if (socket) {
+      socket.emit('user:unblock', unblockedUserId)
+    }
+  }, [socket])
+
+  const getBlockedUsers = useCallback(() => {
+    if (socket) {
+      socket.emit('user:blocked:list')
+    }
+  }, [socket])
+
+  const setModerationCallbacks = useCallback((callbacks: typeof moderationCallbacksRef.current) => {
+    moderationCallbacksRef.current = callbacks
+  }, [])
+
+  const setCallbackCallbacks = useCallback((callbacks: typeof callbackCallbacksRef.current) => {
+    callbackCallbacksRef.current = callbacks
+  }, [])
+
+  // Callback request functions
+  const requestCallback = useCallback((toUserId: string, originalCallTimestamp?: Date, originalCallCountry?: string) => {
+    if (socket) {
+      socket.emit('callback:request', { 
+        toUserId,
+        originalCallTimestamp,
+        originalCallCountry
+      })
+    }
+  }, [socket])
+
+  const acceptCallback = useCallback((requestId: string) => {
+    if (socket) {
+      socket.emit('callback:accept', requestId)
+    }
+  }, [socket])
+
+  const declineCallback = useCallback((requestId: string) => {
+    if (socket) {
+      socket.emit('callback:decline', requestId)
+    }
+  }, [socket])
+
+  const cancelCallback = useCallback((requestId: string) => {
+    if (socket) {
+      socket.emit('callback:cancel', requestId)
+    }
+  }, [socket])
+
+  // Load blocked users list on mount
+  useEffect(() => {
+    if (socket && isConnected) {
+      getBlockedUsers()
+    }
+  }, [socket, isConnected, getBlockedUsers])
+
   return {
     socket,
     isConnected,
@@ -302,6 +598,9 @@ export function useSocket() {
     partner,
     sessionId,
     messages,
+    blockedUsers,
+    onlineUsers,
+    incomingCallbackRequest,
     connectUser,
     requestCall,
     endCall,
@@ -310,5 +609,15 @@ export function useSocket() {
     sendWebRTCMessage,
     updateAudioLevel,
     toggleMute,
+    reportUser,
+    blockUser,
+    unblockUser,
+    getBlockedUsers,
+    setModerationCallbacks,
+    setCallbackCallbacks,
+    requestCallback,
+    acceptCallback,
+    declineCallback,
+    cancelCallback,
   }
 }

@@ -117,3 +117,40 @@ export interface GameEnded {
   reason?: 'quit';
 }
 
+// Moderation Types
+export type ReportReason = 
+  | 'harassment' 
+  | 'inappropriate_content' 
+  | 'spam' 
+  | 'scam' 
+  | 'personal_info_request' 
+  | 'other';
+
+export interface ReportUserData {
+  reportedUserId: string;
+  reason: ReportReason;
+  description?: string;
+  sessionId?: string;
+}
+
+// Call History Types
+export interface CallHistoryEntry {
+  partnerId: string;
+  sessionId: string;
+  timestamp: Date;
+  duration: number; // in seconds
+  country?: string;
+}
+
+export type CallbackRequestStatus = 'pending' | 'accepted' | 'declined' | 'expired';
+
+export interface CallbackRequest {
+  requestId: string;
+  fromUserId: string;
+  toUserId: string;
+  timestamp: Date;
+  status: CallbackRequestStatus;
+  originalCallTimestamp?: Date;
+  originalCallCountry?: string;
+}
+

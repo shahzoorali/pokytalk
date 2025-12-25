@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSocket } from '@/hooks/useSocket'
 import { useWebRTC } from '@/hooks/useWebRTC'
 import { useGame } from '@/hooks/useGame'
+import { useCallHistory } from '@/hooks/useCallHistory'
 import { ConnectionScreen } from './ConnectionScreen'
 import { UserFilters } from '@/types'
 
@@ -15,6 +16,10 @@ export function VoiceChatApp() {
   const isUnmountingRef = useRef(false)
   const callInProgressRef = useRef(false)
   const peerSessionRef = useRef<string | null>(null)
+  const callStartTimeRef = useRef<Date | null>(null)
+  
+  // Call history hook
+  const callHistory = useCallHistory()
   
   const {
     socket,
@@ -26,6 +31,7 @@ export function VoiceChatApp() {
     partner,
     sessionId,
     messages,
+    blockedUsers,
     connectUser,
     requestCall,
     endCall,
@@ -34,6 +40,19 @@ export function VoiceChatApp() {
     sendWebRTCMessage,
     updateAudioLevel,
     toggleMute,
+    reportUser,
+    blockUser,
+    unblockUser,
+    getBlockedUsers,
+    setModerationCallbacks,
+    // Callback request functions
+    onlineUsers,
+    incomingCallbackRequest,
+    requestCallback,
+    acceptCallback,
+    declineCallback,
+    cancelCallback,
+    setCallbackCallbacks,
   } = useSocket()
 
   const {
@@ -105,15 +124,68 @@ export function VoiceChatApp() {
     }
   }, [socket, handleWebRTCMessageCallback])
 
-  // Track call state changes
+  // Track call state changes and call start time
   useEffect(() => {
     if (partner && sessionId) {
       callInProgressRef.current = true
+      // Track call start time for duration calculation
+      if (!callStartTimeRef.current) {
+        callStartTimeRef.current = new Date()
+        console.log('📞 Call started at:', callStartTimeRef.current)
+      }
     } else if (!isWaiting) {
       callInProgressRef.current = false
       // Don't reset peerSessionRef here - let the cleanup effect handle it
     }
   }, [partner?.id, sessionId, isWaiting])
+
+  // Save call history when call ends
+  useEffect(() => {
+    // Listen for call:ended event from socket
+    if (!socket) return
+
+    const handleCallEnded = (endedSessionId: string) => {
+      if (!partner || !sessionId || sessionId !== endedSessionId) return
+      if (!callStartTimeRef.current) return
+
+      // Calculate duration
+      const endTime = new Date()
+      const duration = Math.floor((endTime.getTime() - callStartTimeRef.current.getTime()) / 1000) // in seconds
+
+      // Only save if call lasted at least 1 second
+      if (duration >= 1) {
+        callHistory.addCallHistory({
+          partnerId: partner.id,
+          sessionId: endedSessionId,
+          timestamp: callStartTimeRef.current,
+          duration,
+          country: partner.country,
+        })
+        console.log('💾 Saved call to history:', {
+          partnerId: partner.id,
+          duration,
+          country: partner.country,
+        })
+      }
+
+      // Reset call start time
+      callStartTimeRef.current = null
+    }
+
+    socket.on('call:ended', handleCallEnded)
+
+    return () => {
+      socket.off('call:ended', handleCallEnded)
+    }
+  }, [socket, partner, sessionId, callHistory])
+
+  // Remove blocked users from call history
+  useEffect(() => {
+    if (blockedUsers.length > 0) {
+      callHistory.removeBlockedUsers(blockedUsers)
+      console.log('🚫 Removed blocked users from call history:', blockedUsers)
+    }
+  }, [blockedUsers, callHistory])
 
   // Create peer once per session - simplified flow
   useEffect(() => {
@@ -265,6 +337,30 @@ export function VoiceChatApp() {
     if (isUnmountingRef.current) return
     
     console.log('📞 Ending call...')
+    
+    // Save call history if we have partner and session
+    if (partner && sessionId && callStartTimeRef.current) {
+      const endTime = new Date()
+      const duration = Math.floor((endTime.getTime() - callStartTimeRef.current.getTime()) / 1000)
+      
+      if (duration >= 1) {
+        callHistory.addCallHistory({
+          partnerId: partner.id,
+          sessionId,
+          timestamp: callStartTimeRef.current,
+          duration,
+          country: partner.country,
+        })
+        console.log('💾 Saved call to history:', {
+          partnerId: partner.id,
+          duration,
+          country: partner.country,
+        })
+      }
+      
+      callStartTimeRef.current = null
+    }
+    
     callInProgressRef.current = false
     peerSessionRef.current = null
     endCall()
@@ -278,7 +374,7 @@ export function VoiceChatApp() {
         setIsLoading(false)
       }
     }, 200)
-  }, [endCall, cleanupWebRTC])
+  }, [endCall, cleanupWebRTC, partner, sessionId, callHistory])
 
   const handleToggleMute = useCallback(() => {
     if (isUnmountingRef.current) return
@@ -447,6 +543,23 @@ export function VoiceChatApp() {
         remoteStream={remoteStream}
         // Game props
         gameHook={gameHook}
+        // Moderation props
+        onReportUser={reportUser}
+        onBlockUser={blockUser}
+        onUnblockUser={unblockUser}
+        blockedUsers={blockedUsers}
+        setModerationCallbacks={setModerationCallbacks}
+        // Call history props
+        callHistory={callHistory.history}
+        onlineUsers={onlineUsers}
+        incomingCallbackRequest={incomingCallbackRequest}
+        onRequestCallback={requestCallback}
+        onClearHistory={callHistory.clearCallHistory}
+        onAcceptCallback={acceptCallback}
+        onDeclineCallback={declineCallback}
+        onBlockedUserRemoved={(blockedUserId) => {
+          callHistory.removeBlockedUsers([blockedUserId])
+        }}
       />
 
       {/* Connection status indicator */}

@@ -3,7 +3,9 @@ import { UserManager } from './userManager';
 import { CallManager } from './callManager';
 import { StatsManager } from './statsManager';
 import { GameManager } from './gameManager';
-import { User, UserFilters, WebRTCMessage, ChatMessage, HangmanSetWordData, HangmanGuessData } from './types';
+import { ModerationManager } from './moderationManager';
+import { CallbackManager } from './callbackManager';
+import { User, UserFilters, WebRTCMessage, ChatMessage, HangmanSetWordData, HangmanGuessData, ReportUserData, CallbackRequestData } from './types';
 
 export class SocketManager {
   constructor(
@@ -11,7 +13,9 @@ export class SocketManager {
     private userManager: UserManager,
     private callManager: CallManager,
     private statsManager: StatsManager,
-    private gameManager: GameManager
+    private gameManager: GameManager,
+    private moderationManager: ModerationManager,
+    private callbackManager: CallbackManager
   ) {
     this.setupSocketHandlers();
     this.startStatsUpdateInterval();
@@ -58,6 +62,9 @@ export class SocketManager {
           
           socket.emit('user:connect', user);
           this.updateStats();
+          
+          // Emit user:online event for call history tracking
+          this.io.emit('user:online', user.id);
           
           console.log(`✅ User connected successfully: ${user.id} (Age: ${user.age}, Country: ${user.country || 'Not detected'})`);
         } catch (error) {
@@ -134,9 +141,15 @@ export class SocketManager {
             console.log(`📢 Notifying partner ${partner.id} about call end`);
             this.io.to(partner.socketId).emit('call:ended', session.id);
             this.userManager.updateUser(partner.id, { isInCall: false, partnerId: undefined });
+            
+            // Check for pending callback requests for the partner
+            this.checkPendingCallbackRequests(partner.id);
           } else {
             console.error(`❌ Partner not found: ${user.partnerId}`);
           }
+          
+          // Check for pending callback requests for the user who ended the call
+          this.checkPendingCallbackRequests(userId);
         } else {
           console.error(`❌ Session not found for user: ${userId}`);
           // Even if no session, still notify the user to clear their state
@@ -226,9 +239,38 @@ export class SocketManager {
           return;
         }
 
+        // Check for suspicious behavior
+        const detection = this.moderationManager.detectSuspiciousBehavior(data.content);
+        
+        if (detection.isSuspicious) {
+          console.log(`⚠️ Suspicious message detected from ${userId}:`, detection.reasons);
+          
+          // Notify partner about suspicious behavior
+          const partnerId = this.callManager.getPartnerId(data.sessionId, userId);
+          if (partnerId) {
+            const partner = this.userManager.getUser(partnerId);
+            if (partner) {
+              this.io.to(partner.socketId).emit('moderation:suspicious', {
+                message: 'Suspicious behavior detected in the conversation',
+                reasons: detection.reasons
+              });
+            }
+          }
+        }
+
+        // Check if user is blocked by partner
+        const partnerId = this.callManager.getPartnerId(data.sessionId, userId);
+        if (partnerId) {
+          const partner = this.userManager.getUser(partnerId);
+          if (partner && this.moderationManager.isBlocked(partner.id, userId)) {
+            console.log(`🚫 Message blocked: ${userId} is blocked by ${partner.id}`);
+            socket.emit('chat:error', 'You have been blocked by this user');
+            return;
+          }
+        }
+
         const message = this.callManager.addMessage(data.sessionId, userId, data.content);
         if (message) {
-          const partnerId = this.callManager.getPartnerId(data.sessionId, userId);
           if (partnerId) {
             const partner = this.userManager.getUser(partnerId);
             if (partner) {
@@ -255,6 +297,436 @@ export class SocketManager {
         console.log(`📤 Sending ${messages.length} messages to ${userId}`);
         socket.emit('chat:history', messages);
       });
+
+      // ==================== MODERATION EVENTS ====================
+
+      // Handle user report
+      socket.on('user:report', (data: ReportUserData) => {
+        const userId = socket.data.userId;
+        console.log(`🚨 User report from ${userId} against ${data.reportedUserId}:`, data.reason);
+        
+        if (!userId) {
+          console.error(`❌ No userId found for report from socket ${socket.id}`);
+          socket.emit('user:report:error', 'Not authenticated');
+          return;
+        }
+
+        if (userId === data.reportedUserId) {
+          socket.emit('user:report:error', 'Cannot report yourself');
+          return;
+        }
+
+        const reportedUser = this.userManager.getUser(data.reportedUserId);
+        if (!reportedUser) {
+          socket.emit('user:report:error', 'User not found');
+          return;
+        }
+
+        // Create report
+        const report = this.moderationManager.reportUser(
+          userId,
+          data.reportedUserId,
+          data.reason,
+          data.description,
+          data.sessionId
+        );
+
+        // Auto-block the reported user for the reporter
+        this.moderationManager.blockUser(userId, data.reportedUserId);
+
+        // If in a call, end it
+        const user = this.userManager.getUser(userId);
+        if (user && user.partnerId === data.reportedUserId) {
+          socket.emit('call:end');
+        }
+
+        socket.emit('user:report:success', {
+          message: 'User reported successfully. They have been blocked.',
+          reportId: report.id
+        });
+
+        // Check if user should be auto-banned
+        const reportCount = this.moderationManager.getReportCount(data.reportedUserId);
+        if (reportCount >= 5) {
+          console.log(`⚠️ User ${data.reportedUserId} has ${reportCount} reports - considering ban`);
+          // In production, you might want to automatically disconnect/ban the user
+          const reportedSocket = this.io.sockets.sockets.get(reportedUser.socketId);
+          if (reportedSocket) {
+            reportedSocket.emit('moderation:warning', {
+              message: 'Your account has received multiple reports. Please review our community guidelines.',
+              reportCount
+            });
+          }
+        }
+      });
+
+      // Handle user block
+      socket.on('user:block', (blockedUserId: string) => {
+        const userId = socket.data.userId;
+        console.log(`🚫 Block request from ${userId} for ${blockedUserId}`);
+        
+        if (!userId) {
+          socket.emit('user:block:error', 'Not authenticated');
+          return;
+        }
+
+        if (userId === blockedUserId) {
+          socket.emit('user:block:error', 'Cannot block yourself');
+          return;
+        }
+
+        const blockedUser = this.userManager.getUser(blockedUserId);
+        if (!blockedUser) {
+          socket.emit('user:block:error', 'User not found');
+          return;
+        }
+
+        // Block the user
+        this.moderationManager.blockUser(userId, blockedUserId);
+
+        // If in a call, end it
+        const user = this.userManager.getUser(userId);
+        if (user && user.partnerId === blockedUserId) {
+          socket.emit('call:end');
+        }
+
+        socket.emit('user:block:success', {
+          message: 'User blocked successfully',
+          blockedUserId
+        });
+      });
+
+      // Handle user unblock
+      socket.on('user:unblock', (unblockedUserId: string) => {
+        const userId = socket.data.userId;
+        
+        if (!userId) {
+          socket.emit('user:unblock:error', 'Not authenticated');
+          return;
+        }
+
+        this.moderationManager.unblockUser(userId, unblockedUserId);
+        socket.emit('user:unblock:success', { unblockedUserId });
+      });
+
+      // Get blocked users list
+      socket.on('user:blocked:list', () => {
+        const userId = socket.data.userId;
+        
+        if (!userId) {
+          socket.emit('user:blocked:list:error', 'Not authenticated');
+          return;
+        }
+
+        const blockedUsers = this.moderationManager.getBlockedUsers(userId);
+        socket.emit('user:blocked:list', blockedUsers);
+      });
+
+      // Handle callback request
+      socket.on('callback:request', (data: CallbackRequestData) => {
+        const userId = socket.data.userId;
+        
+        if (!userId) {
+          socket.emit('callback:request:error', { message: 'Not authenticated' });
+          return;
+        }
+
+        const { toUserId, originalCallTimestamp, originalCallCountry } = data;
+        
+        // Validate target user exists
+        const targetUser = this.userManager.getUser(toUserId);
+        if (!targetUser) {
+          socket.emit('callback:request:error', { message: 'User not found or offline' });
+          return;
+        }
+
+        // Check if requester is blocked by target
+        if (this.moderationManager.isBlocked(userId, toUserId)) {
+          // Silent fail for blocked users
+          socket.emit('callback:request:error', { message: 'Cannot request callback' });
+          return;
+        }
+
+        // Check if target has blocked requester
+        if (this.moderationManager.isBlocked(toUserId, userId)) {
+          // Silent fail
+          socket.emit('callback:request:error', { message: 'Cannot request callback' });
+          return;
+        }
+
+        // Check for mutual callback (both users requesting callback to each other)
+        const mutualRequest = this.callbackManager.checkMutualCallback(userId, toUserId);
+        if (mutualRequest) {
+          // Auto-match - both users want to call each other
+          console.log(`🤝 Mutual callback detected between ${userId} and ${toUserId}`);
+          
+          // Create call session immediately
+          const session = this.callManager.createSession(userId, toUserId);
+          if (!session) {
+            socket.emit('callback:request:error', { message: 'Failed to create call session' });
+            return;
+          }
+
+          // Update user states
+          this.userManager.updateUser(userId, { isInCall: true, partnerId: toUserId });
+          this.userManager.updateUser(toUserId, { isInCall: true, partnerId: userId });
+
+          // Remove both users from queue
+          this.userManager.removeFromQueue(userId);
+          this.userManager.removeFromQueue(toUserId);
+
+          // Get user objects for matching
+          const user1 = this.userManager.getUser(userId);
+          const user2 = this.userManager.getUser(toUserId);
+
+          if (user1 && user2) {
+            // Determine initiator (use userId comparison for consistency)
+            const initiatorId = userId < toUserId ? userId : toUserId;
+            
+            // Notify both users
+            this.io.to(user1.socketId).emit('callback:mutual', {
+              partner: user2,
+              sessionId: session.id,
+              initiatorId
+            });
+            this.io.to(user2.socketId).emit('callback:mutual', {
+              partner: user1,
+              sessionId: session.id,
+              initiatorId
+            });
+
+            // Also emit call:matched for compatibility
+            this.io.to(user1.socketId).emit('call:matched', user2, session.id, initiatorId);
+            this.io.to(user2.socketId).emit('call:matched', user1, session.id, initiatorId);
+
+            // Record match in stats
+            this.statsManager.recordMatch(user1.country || 'Unknown', user2.country || 'Unknown');
+          }
+
+          // Clean up mutual requests
+          const user1Requests = this.callbackManager.getPendingRequestsSent(userId);
+          const user2Requests = this.callbackManager.getPendingRequestsSent(toUserId);
+          user1Requests.forEach(req => {
+            if (req.toUserId === toUserId) {
+              this.callbackManager.cancelRequest(req.id);
+            }
+          });
+          user2Requests.forEach(req => {
+            if (req.toUserId === userId) {
+              this.callbackManager.cancelRequest(req.id);
+            }
+          });
+
+          return;
+        }
+
+        // Check if target user is in a call
+        if (targetUser.isInCall) {
+          // Queue the callback request - we'll notify when they become available
+          const request = this.callbackManager.createRequest(userId, toUserId, originalCallTimestamp, originalCallCountry);
+          socket.emit('callback:request:queued', {
+            requestId: request.id,
+            message: 'User is currently in a call. You will be notified when they become available.'
+          });
+          return;
+        }
+
+        // Create callback request
+        const request = this.callbackManager.createRequest(userId, toUserId, originalCallTimestamp, originalCallCountry);
+        
+        // Notify requester
+        socket.emit('callback:request:sent', {
+          requestId: request.id,
+          message: 'Callback request sent'
+        });
+
+        // Notify target user
+        const requester = this.userManager.getUser(userId);
+        if (requester) {
+          this.io.to(targetUser.socketId).emit('callback:request:received', {
+            requestId: request.id,
+            fromUserId: userId,
+            fromCountry: requester.country,
+            originalCallTimestamp: request.originalCallTimestamp,
+            originalCallCountry: request.originalCallCountry
+          });
+        }
+      });
+
+      // Handle callback accept
+      socket.on('callback:accept', (requestId: string) => {
+        const userId = socket.data.userId;
+        
+        if (!userId) {
+          socket.emit('callback:accept:error', { message: 'Not authenticated' });
+          return;
+        }
+
+        const request = this.callbackManager.getRequest(requestId);
+        if (!request) {
+          socket.emit('callback:accept:error', { message: 'Request not found or expired' });
+          return;
+        }
+
+        // Verify this user is the target of the request
+        if (request.toUserId !== userId) {
+          socket.emit('callback:accept:error', { message: 'Unauthorized' });
+          return;
+        }
+
+        // Verify request is still pending
+        if (request.status !== 'pending') {
+          socket.emit('callback:accept:error', { message: 'Request already processed' });
+          return;
+        }
+
+        // Check if requester is still online
+        const requester = this.userManager.getUser(request.fromUserId);
+        if (!requester || !requester.isConnected) {
+          socket.emit('callback:accept:error', { message: 'Requester is no longer online' });
+          return;
+        }
+
+        // Check if either user is in a call
+        if (requester.isInCall || userId === requester.partnerId) {
+          socket.emit('callback:accept:error', { message: 'Requester is currently in a call' });
+          return;
+        }
+
+        const accepter = this.userManager.getUser(userId);
+        if (accepter && accepter.isInCall) {
+          socket.emit('callback:accept:error', { message: 'You are currently in a call' });
+          return;
+        }
+
+        // Accept the request
+        const acceptedRequest = this.callbackManager.acceptRequest(requestId);
+        if (!acceptedRequest) {
+          socket.emit('callback:accept:error', { message: 'Failed to accept request' });
+          return;
+        }
+
+        // Create call session
+        const session = this.callManager.createSession(request.fromUserId, userId);
+        if (!session) {
+          socket.emit('callback:accept:error', { message: 'Failed to create call session' });
+          return;
+        }
+
+        // Update user states
+        this.userManager.updateUser(request.fromUserId, { isInCall: true, partnerId: userId });
+        this.userManager.updateUser(userId, { isInCall: true, partnerId: request.fromUserId });
+
+        // Remove both users from queue
+        this.userManager.removeFromQueue(request.fromUserId);
+        this.userManager.removeFromQueue(userId);
+
+        // Determine initiator
+        const initiatorId = request.fromUserId < userId ? request.fromUserId : userId;
+
+        // Notify both users
+        if (requester && accepter) {
+          this.io.to(requester.socketId).emit('callback:request:accepted', {
+            requestId: requestId,
+            partner: accepter,
+            sessionId: session.id,
+            initiatorId
+          });
+          this.io.to(accepter.socketId).emit('callback:request:accepted', {
+            requestId: requestId,
+            partner: requester,
+            sessionId: session.id,
+            initiatorId
+          });
+
+          // Also emit call:matched for compatibility
+          this.io.to(requester.socketId).emit('call:matched', accepter, session.id, initiatorId);
+          this.io.to(accepter.socketId).emit('call:matched', requester, session.id, initiatorId);
+
+          // Record match in stats
+          this.statsManager.recordMatch(requester.country || 'Unknown', accepter.country || 'Unknown');
+        }
+      });
+
+      // Handle callback decline
+      socket.on('callback:decline', (requestId: string) => {
+        const userId = socket.data.userId;
+        
+        if (!userId) {
+          socket.emit('callback:decline:error', { message: 'Not authenticated' });
+          return;
+        }
+
+        const request = this.callbackManager.getRequest(requestId);
+        if (!request) {
+          socket.emit('callback:decline:error', { message: 'Request not found' });
+          return;
+        }
+
+        // Verify this user is the target of the request
+        if (request.toUserId !== userId) {
+          socket.emit('callback:decline:error', { message: 'Unauthorized' });
+          return;
+        }
+
+        // Decline the request
+        const declinedRequest = this.callbackManager.declineRequest(requestId);
+        if (!declinedRequest) {
+          socket.emit('callback:decline:error', { message: 'Failed to decline request' });
+          return;
+        }
+
+        // Notify requester
+        const requester = this.userManager.getUser(request.fromUserId);
+        if (requester) {
+          this.io.to(requester.socketId).emit('callback:request:declined', {
+            requestId: requestId,
+            message: 'Callback request was declined'
+          });
+        }
+
+        socket.emit('callback:decline:success', { requestId });
+      });
+
+      // Handle callback cancel
+      socket.on('callback:cancel', (requestId: string) => {
+        const userId = socket.data.userId;
+        
+        if (!userId) {
+          socket.emit('callback:cancel:error', { message: 'Not authenticated' });
+          return;
+        }
+
+        const request = this.callbackManager.getRequest(requestId);
+        if (!request) {
+          socket.emit('callback:cancel:error', { message: 'Request not found' });
+          return;
+        }
+
+        // Verify this user is the requester
+        if (request.fromUserId !== userId) {
+          socket.emit('callback:cancel:error', { message: 'Unauthorized' });
+          return;
+        }
+
+        // Cancel the request
+        const cancelledRequest = this.callbackManager.cancelRequest(requestId);
+        if (!cancelledRequest) {
+          socket.emit('callback:cancel:error', { message: 'Failed to cancel request' });
+          return;
+        }
+
+        // Notify target user if they're online
+        const targetUser = this.userManager.getUser(request.toUserId);
+        if (targetUser) {
+          this.io.to(targetUser.socketId).emit('callback:request:cancelled', {
+            requestId: requestId
+          });
+        }
+
+        socket.emit('callback:cancel:success', { requestId });
+      });
+
 
       // Handle audio level updates
       socket.on('audio:level', (level: number) => {
@@ -666,6 +1138,9 @@ export class SocketManager {
               this.userManager.removeFromQueue(userId);
             }
 
+            // Emit user:offline event for call history tracking
+            this.io.emit('user:offline', userId);
+            
             // Remove user
             this.userManager.removeUser(userId);
             this.updateStats();
@@ -685,6 +1160,44 @@ export class SocketManager {
         console.error(`❌ Socket error for ${userId} (${socket.id}):`, error);
       });
     });
+  }
+
+  /**
+   * Check for pending callback requests when a user becomes available
+   */
+  private checkPendingCallbackRequests(userId: string): void {
+    const user = this.userManager.getUser(userId);
+    if (!user || user.isInCall) {
+      return; // User not found or still in call
+    }
+
+    // Get pending requests received by this user
+    const pendingRequests = this.callbackManager.getPendingRequestsReceived(userId);
+    
+    if (pendingRequests.length === 0) {
+      return; // No pending requests
+    }
+
+    // Notify the user about the first pending request (they can accept/decline)
+    const request = pendingRequests[0];
+    const requester = this.userManager.getUser(request.fromUserId);
+    
+    if (requester && requester.isConnected && !requester.isInCall) {
+      // User is now available - notify them about the callback request
+      this.io.to(user.socketId).emit('callback:request:received', {
+        requestId: request.id,
+        fromUserId: request.fromUserId,
+        fromCountry: requester.country,
+        originalCallTimestamp: request.originalCallTimestamp,
+        originalCallCountry: request.originalCallCountry
+      });
+      
+      // Notify requester that their callback target is now available
+      this.io.to(requester.socketId).emit('callback:request:available', {
+        requestId: request.id,
+        message: 'User is now available for callback'
+      });
+    }
   }
 
   /**
@@ -794,11 +1307,15 @@ export class SocketManager {
     setInterval(() => {
       const cleanedSessions = this.callManager.cleanupInactiveSessions();
       const cleanedGames = this.gameManager.cleanupOldGames();
+      const cleanedReports = this.moderationManager.cleanupOldReports();
       if (cleanedSessions > 0) {
         console.log(`🧹 Cleaned up ${cleanedSessions} inactive sessions`);
       }
       if (cleanedGames > 0) {
         console.log(`🧹 Cleaned up ${cleanedGames} old games`);
+      }
+      if (cleanedReports > 0) {
+        console.log(`🧹 Cleaned up ${cleanedReports} old reports`);
       }
     }, 60000); // Cleanup every minute
   }

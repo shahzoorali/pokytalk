@@ -1,14 +1,20 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Phone, Users, Globe, ChevronDown, ChevronUp, Mic, MicOff, MessageSquare, X, Send, Search, Gamepad2 } from 'lucide-react'
-import { ServerStats, UserFilters, User, ChatMessage } from '@/types'
+import { Phone, Users, Globe, ChevronDown, ChevronUp, Mic, MicOff, MessageSquare, X, Send, Search, Gamepad2, Flag as FlagIcon, ShieldOff, History } from 'lucide-react'
+import { ServerStats, UserFilters, User, ChatMessage, ReportUserData } from '@/types'
 import { AudioLevelBar } from './AudioLevelBar'
 import { Flag } from './Flag'
 import { HangmanGame } from './HangmanGame'
 import { COUNTRIES } from '@/lib/countries'
 import { getCountryName } from '@/lib/utils'
 import { useGame } from '@/hooks/useGame'
+import { ReportModal } from './ReportModal'
+import { BlockDialog } from './BlockDialog'
+import { NotificationModal } from './NotificationModal'
+import { CallHistorySidebar } from './CallHistorySidebar'
+import { CallbackRequestModal } from './CallbackRequestModal'
+import { useCallHistory } from '@/hooks/useCallHistory'
 
 interface ConnectionScreenProps {
   onStartCall: (filters?: UserFilters) => void
@@ -36,6 +42,35 @@ interface ConnectionScreenProps {
   remoteStream?: MediaStream | null
   // Game props
   gameHook?: ReturnType<typeof useGame>
+  // Moderation props
+  onReportUser?: (data: ReportUserData) => void
+  onBlockUser?: (blockedUserId: string) => void
+  onUnblockUser?: (unblockedUserId: string) => void
+  blockedUsers?: string[]
+  setModerationCallbacks?: (callbacks: {
+    onReportSuccess?: (message: string) => void
+    onReportError?: (error: string) => void
+    onBlockSuccess?: (message: string) => void
+    onBlockError?: (error: string) => void
+    onSuspiciousBehavior?: (data: { message: string; reasons: string[] }) => void
+    onModerationWarning?: (message: string) => void
+    onChatError?: (message: string) => void
+  }) => void
+  // Call history props
+  callHistory?: CallHistoryEntry[]
+  onlineUsers?: Set<string>
+  onRequestCallback?: (partnerId: string, originalCallTimestamp?: Date, originalCallCountry?: string) => void
+  onClearHistory?: () => void
+  incomingCallbackRequest?: {
+    requestId: string
+    fromUserId: string
+    fromCountry?: string
+    originalCallTimestamp?: Date
+    originalCallCountry?: string
+  } | null
+  onAcceptCallback?: (requestId: string) => void
+  onDeclineCallback?: (requestId: string) => void
+  onBlockedUserRemoved?: (blockedUserId: string) => void
 }
 
 export function ConnectionScreen({ 
@@ -64,6 +99,21 @@ export function ConnectionScreen({
   remoteStream,
   // Game
   gameHook,
+  // Moderation
+  onReportUser,
+  onBlockUser,
+  onUnblockUser,
+  blockedUsers = [],
+  setModerationCallbacks,
+  // Call history props
+  callHistory = [],
+  onlineUsers = new Set(),
+  onRequestCallback,
+  onClearHistory,
+  incomingCallbackRequest,
+  onAcceptCallback,
+  onDeclineCallback,
+  onBlockedUserRemoved,
 }: ConnectionScreenProps) {
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -72,8 +122,25 @@ export function ConnectionScreen({
   const [countrySearch, setCountrySearch] = useState('')
   const [messageInput, setMessageInput] = useState('')
   const [isGameOpen, setIsGameOpen] = useState(false)
+  const [isHistorySidebarOpen, setIsHistorySidebarOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const remoteAudioRef = useRef<HTMLAudioElement>(null)
+  
+  // Moderation state
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [showBlockDialog, setShowBlockDialog] = useState(false)
+  const [notification, setNotification] = useState<{
+    isOpen: boolean
+    type: 'success' | 'warning' | 'error'
+    title: string
+    message: string
+  }>({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: '',
+  })
+  const shouldBlockAfterReportRef = useRef(false)
   
   const loading = isLoading || externalLoading
   
@@ -88,6 +155,76 @@ export function ConnectionScreen({
       setIsEndingCall(false)
     }
   }, [isInCall])
+
+  // Set up moderation callbacks
+  useEffect(() => {
+    if (setModerationCallbacks) {
+      setModerationCallbacks({
+        onReportSuccess: (message: string) => {
+          setNotification({
+            isOpen: true,
+            type: 'success',
+            title: 'Report Submitted',
+            message: message || 'Your report has been submitted successfully. Thank you for helping keep our community safe.',
+          })
+          // End call after reporting
+          if (onEndCall) {
+            setTimeout(() => {
+              onEndCall()
+            }, 1000)
+          }
+        },
+        onReportError: (error: string) => {
+          setNotification({
+            isOpen: true,
+            type: 'error',
+            title: 'Report Failed',
+            message: error || 'Failed to submit report. Please try again.',
+          })
+        },
+        onBlockSuccess: (message: string) => {
+          setNotification({
+            isOpen: true,
+            type: 'success',
+            title: 'User Blocked',
+            message: message || 'This user has been blocked. You will not be matched with them again.',
+          })
+        },
+        onBlockError: (error: string) => {
+          setNotification({
+            isOpen: true,
+            type: 'error',
+            title: 'Block Failed',
+            message: error || 'Failed to block user. Please try again.',
+          })
+        },
+        onSuspiciousBehavior: (data: { message: string; reasons: string[] }) => {
+          setNotification({
+            isOpen: true,
+            type: 'warning',
+            title: 'Suspicious Behavior Detected',
+            message: `${data.message}\n\nReasons: ${data.reasons.join(', ')}\n\nYou can report this user if needed.`,
+          })
+        },
+        onModerationWarning: (message: string) => {
+          setNotification({
+            isOpen: true,
+            type: 'warning',
+            title: 'Moderation Warning',
+            message: message,
+          })
+        },
+        onChatError: (message: string) => {
+          setNotification({
+            isOpen: true,
+            type: 'error',
+            title: 'Message Failed',
+            message: message,
+          })
+        },
+      })
+    }
+  }, [setModerationCallbacks, onEndCall])
 
   // Filter countries based on search
   const filteredCountries = COUNTRIES.filter(country =>
@@ -427,6 +564,22 @@ export function ConnectionScreen({
                       )}
                     </button>
 
+                    {/* History Button */}
+                    {callHistory && callHistory.length > 0 && (
+                      <button
+                        onClick={() => setIsHistorySidebarOpen(true)}
+                        className="p-2 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors relative"
+                        title="Call History"
+                      >
+                        <History className="w-4 h-4" />
+                        {callHistory.length > 0 && (
+                          <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center text-xs text-white">
+                            {callHistory.length > 9 ? '9+' : callHistory.length}
+                          </span>
+                        )}
+                      </button>
+                    )}
+
                     {/* Game Button */}
                     {gameHook && (
                       <button
@@ -446,6 +599,33 @@ export function ConnectionScreen({
                       </button>
                     )}
                   </div>
+
+                  {/* Safety Section - Only show when in call */}
+                  {isInCall && partner && (
+                    <div className="mt-4 pt-4 border-t border-gray-700">
+                      <div className="flex items-center justify-center space-x-3">
+                        <button
+                          onClick={() => setShowReportModal(true)}
+                          className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium"
+                          title="Report this user"
+                        >
+                          <FlagIcon className="w-4 h-4" />
+                          <span>Report</span>
+                        </button>
+                        <button
+                          onClick={() => setShowBlockDialog(true)}
+                          className="flex items-center space-x-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm font-medium"
+                          title="Block this user"
+                        >
+                          <ShieldOff className="w-4 h-4" />
+                          <span>Block</span>
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 text-center mt-2">
+                        Report or block users who violate our community guidelines
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Chat Panel - WhatsApp-like design - only show when in call */}
@@ -682,6 +862,103 @@ export function ConnectionScreen({
           clearError={gameHook.clearError}
           isOpen={isGameOpen || gameHook.gameStatus === 'invite_received'}
           onClose={() => setIsGameOpen(false)}
+        />
+      )}
+
+      {/* Report Modal */}
+      <ReportModal
+        isOpen={showReportModal}
+        partnerId={partner?.id || null}
+        sessionId={sessionId || null}
+        onClose={() => {
+          setShowReportModal(false)
+          shouldBlockAfterReportRef.current = false
+        }}
+        onReport={(data) => {
+          if (onReportUser) {
+            onReportUser(data)
+            // If block after report was requested, block now
+            if (shouldBlockAfterReportRef.current && partner && onBlockUser) {
+              onBlockUser(partner.id)
+            }
+          }
+        }}
+      />
+
+      {/* Block Dialog */}
+      <BlockDialog
+        isOpen={showBlockDialog}
+        partnerId={partner?.id || null}
+        onClose={() => setShowBlockDialog(false)}
+        onBlock={(blockedUserId) => {
+          if (onBlockUser) {
+            onBlockUser(blockedUserId)
+            // End call after blocking
+            if (onEndCall) {
+              onEndCall()
+            }
+          }
+        }}
+        onBlockAndReport={() => {
+          setShowBlockDialog(false)
+          shouldBlockAfterReportRef.current = true
+          setShowReportModal(true)
+        }}
+      />
+
+      {/* Notification Modal */}
+      <NotificationModal
+        isOpen={notification.isOpen}
+        type={notification.type}
+        title={notification.title}
+        message={notification.message}
+        onClose={() => setNotification(prev => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* Call History Sidebar */}
+      <CallHistorySidebar
+        isOpen={isHistorySidebarOpen}
+        onClose={() => setIsHistorySidebarOpen(false)}
+        history={callHistory}
+        onlineUsers={onlineUsers}
+        blockedUsers={blockedUsers}
+        onRequestCallback={(partnerId, originalCallTimestamp, originalCallCountry) => {
+          if (onRequestCallback) {
+            onRequestCallback(partnerId, originalCallTimestamp, originalCallCountry)
+          }
+        }}
+        onClearHistory={() => {
+          if (onClearHistory) {
+            onClearHistory()
+          }
+        }}
+      />
+
+      {/* Callback Request Modal */}
+      {incomingCallbackRequest && (
+        <CallbackRequestModal
+          isOpen={!!incomingCallbackRequest}
+          requestId={incomingCallbackRequest.requestId}
+          fromUserId={incomingCallbackRequest.fromUserId}
+          fromCountry={incomingCallbackRequest.fromCountry}
+          originalCallTimestamp={incomingCallbackRequest.originalCallTimestamp}
+          originalCallCountry={incomingCallbackRequest.originalCallCountry}
+          onAccept={(requestId) => {
+            if (onAcceptCallback) {
+              onAcceptCallback(requestId)
+            }
+          }}
+          onDecline={(requestId) => {
+            if (onDeclineCallback) {
+              onDeclineCallback(requestId)
+            }
+          }}
+          onClose={() => {
+            // Decline the request when modal is closed
+            if (onDeclineCallback && incomingCallbackRequest) {
+              onDeclineCallback(incomingCallbackRequest.requestId)
+            }
+          }}
         />
       )}
     </div>
