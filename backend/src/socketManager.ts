@@ -16,6 +16,7 @@ export class SocketManager {
     this.setupSocketHandlers();
     this.startStatsUpdateInterval();
     this.startCleanupInterval();
+    this.startMatchingInterval();
   }
 
   private setupSocketHandlers(): void {
@@ -80,51 +81,16 @@ export class SocketManager {
           return;
         }
 
-        // Add user to waiting queue
-        this.userManager.addToQueue(userId);
+        // Add user to waiting queue with filters
+        this.userManager.addToQueue(userId, filters);
         this.userManager.updateUser(userId, { isInCall: false, partnerId: undefined });
         console.log(`⏳ User ${userId} added to waiting queue`);
 
-        // Try to find a partner
-        const partner = this.userManager.getRandomPartner(userId, filters);
+        // Try to find a partner (with filters first)
+        this.attemptMatch(userId, socket, filters);
         
-        if (partner) {
-          console.log(`🎯 Found partner for ${userId}: ${partner.id}`);
-          
-          // Record the match to prevent same users from matching again
-          this.userManager.recordMatch(userId, partner.id);
-          
-          // Remove both users from queue
-          this.userManager.removeFromQueue(userId);
-          this.userManager.removeFromQueue(partner.id);
-
-          // Create call session
-          const session = this.callManager.createSession(userId, partner.id);
-          console.log(`📋 Created session: ${session.id} for ${userId} ↔ ${partner.id}`);
-          
-          // Update user states
-          this.userManager.updateUser(userId, { isInCall: true, partnerId: partner.id });
-          this.userManager.updateUser(partner.id, { isInCall: true, partnerId: userId });
-
-          // Deterministically choose an initiator so only one side creates the offer
-          const initiatorId = user.id < partner.id ? user.id : partner.id;
-          
-          // Log partner info for debugging
-          console.log(`📤 Sending call:matched to ${user.id}: partner=${partner.id}, country=${partner.country || 'undefined'}`);
-          console.log(`📤 Sending call:matched to ${partner.id}: partner=${user.id}, country=${user.country || 'undefined'}`);
-          
-          // Notify both users with initiator information
-          socket.emit('call:matched', partner, session.id, initiatorId);
-          this.io.to(partner.socketId).emit('call:matched', user, session.id, initiatorId);
-
-          this.statsManager.incrementTotalSessions();
-          this.updateStats();
-          
-          console.log(`✅ Call matched successfully: ${user.id} ↔ ${partner.id} (Session: ${session.id})`);
-        } else {
-          console.log(`⏳ No partner found for ${userId}, user will wait`);
-          socket.emit('call:waiting');
-        }
+        // Also try to match other waiting users with this new user
+        this.tryMatchWaitingUsers(userId);
       });
 
       // Handle call end
@@ -721,6 +687,87 @@ export class SocketManager {
     });
   }
 
+  /**
+   * Attempt to match a user with a partner, using filters first, then falling back to any caller
+   */
+  private attemptMatch(userId: string, socket: Socket, filters?: UserFilters): void {
+    const user = this.userManager.getUser(userId);
+    if (!user || user.isInCall) return;
+
+    // Check if we should use fallback (after max attempts)
+    const useFallback = this.userManager.shouldUseFallback(userId);
+    
+    if (useFallback) {
+      console.log(`🔄 User ${userId} exceeded filter attempts, using fallback (matching with any caller)`);
+    }
+
+    // Try to find a partner (with or without filters based on fallback)
+    const partner = this.userManager.getRandomPartner(userId, filters, useFallback);
+    
+    if (partner) {
+      console.log(`🎯 Found partner for ${userId}: ${partner.id}${useFallback ? ' (fallback match)' : ''}`);
+      
+      // Record the match to prevent same users from matching again
+      this.userManager.recordMatch(userId, partner.id);
+      
+      // Remove both users from queue
+      this.userManager.removeFromQueue(userId);
+      this.userManager.removeFromQueue(partner.id);
+
+      // Create call session
+      const session = this.callManager.createSession(userId, partner.id);
+      console.log(`📋 Created session: ${session.id} for ${userId} ↔ ${partner.id}`);
+      
+      // Update user states
+      this.userManager.updateUser(userId, { isInCall: true, partnerId: partner.id });
+      this.userManager.updateUser(partner.id, { isInCall: true, partnerId: userId });
+
+      // Deterministically choose an initiator so only one side creates the offer
+      const initiatorId = user.id < partner.id ? user.id : partner.id;
+      
+      // Log partner info for debugging
+      console.log(`📤 Sending call:matched to ${user.id}: partner=${partner.id}, country=${partner.country || 'undefined'}`);
+      console.log(`📤 Sending call:matched to ${partner.id}: partner=${user.id}, country=${user.country || 'undefined'}`);
+      
+      // Notify both users with initiator information
+      socket.emit('call:matched', partner, session.id, initiatorId);
+      this.io.to(partner.socketId).emit('call:matched', user, session.id, initiatorId);
+
+      this.statsManager.incrementTotalSessions();
+      this.updateStats();
+      
+      console.log(`✅ Call matched successfully: ${user.id} ↔ ${partner.id} (Session: ${session.id})`);
+    } else {
+      // No partner found, increment attempt count and wait
+      this.userManager.incrementAttemptCount(userId);
+      const info = this.userManager.getWaitingUserInfo(userId);
+      const attemptCount = info ? info.attemptCount : 0;
+      console.log(`⏳ No partner found for ${userId} (attempt ${attemptCount}), user will wait`);
+      socket.emit('call:waiting');
+    }
+  }
+
+  /**
+   * Try to match waiting users when a new user joins or periodically
+   */
+  private tryMatchWaitingUsers(newUserId?: string): void {
+    const waitingUsers = this.userManager.getWaitingUsers(); // Get all waiting users
+    
+    for (const userId of waitingUsers) {
+      const user = this.userManager.getUser(userId);
+      if (!user || user.isInCall) continue;
+
+      const info = this.userManager.getWaitingUserInfo(userId);
+      if (!info) continue;
+
+      const socket = this.io.sockets.sockets.get(user.socketId);
+      if (!socket) continue;
+
+      // Try to match this waiting user
+      this.attemptMatch(userId, socket, info.filters);
+    }
+  }
+
   private updateStats(): void {
     const connectedUsers = this.userManager.getConnectedUsers();
     const activeSessions = this.callManager.getActiveSessions();
@@ -754,5 +801,12 @@ export class SocketManager {
         console.log(`🧹 Cleaned up ${cleanedGames} old games`);
       }
     }, 60000); // Cleanup every minute
+  }
+
+  private startMatchingInterval(): void {
+    // Periodically try to match waiting users (every 3 seconds)
+    setInterval(() => {
+      this.tryMatchWaitingUsers();
+    }, 3000);
   }
 }

@@ -1,0 +1,68 @@
+'use client'
+
+import Link from 'next/link'
+import { AdSense } from '@/components/AdSense'
+
+interface BlogArticle {
+  slug: string
+  title: string
+  excerpt: string
+  date: string
+  author: string
+}
+
+const articles: BlogArticle[] = [
+  {
+    slug: 'talk-to-strangers-online',
+    title: 'How to Talk to Strangers Online',
+    excerpt: 'Technology has made connecting with others easier than ever, yet we still experience a lingering sense of loneliness in this digital age. Learn how to safely and meaningfully connect with strangers online.',
+    date: 'December 25, 2025',
+    author: 'Pokytalk Team'
+  }
+]
+
+export default function BlogPage() {
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <div className="max-w-4xl mx-auto">
+        <Link href="/" className="text-primary-400 hover:text-primary-300 mb-8 inline-block">
+          ← Back to Home
+        </Link>
+        
+        <div className="mb-12">
+          <h1 className="text-5xl font-bold mb-4">Blog</h1>
+          <p className="text-gray-400 text-lg">
+            Tips, guides, and insights on connecting with people around the world
+          </p>
+        </div>
+
+        <div className="space-y-8 mb-12">
+          {articles.map((article) => (
+            <Link
+              key={article.slug}
+              href={`/blog/${article.slug}`}
+              className="block bg-gray-800 rounded-lg p-6 hover:bg-gray-700 transition-colors border border-gray-700 hover:border-primary-500/50"
+            >
+              <h2 className="text-2xl font-semibold text-white mb-3 hover:text-primary-400 transition-colors">
+                {article.title}
+              </h2>
+              <p className="text-gray-400 mb-4 leading-relaxed">
+                {article.excerpt}
+              </p>
+              <div className="flex items-center text-sm text-gray-500">
+                <span>{article.date}</span>
+                <span className="mx-2">•</span>
+                <span>By {article.author}</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        <div className="mt-12">
+          <AdSense adSlot="1234567890" adFormat="horizontal" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
