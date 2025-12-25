@@ -134,6 +134,16 @@ export function useWebRTC() {
         }
       }
       audioContextRef.current = new AudioContext()
+      
+      // Resume audio context if suspended (for mobile)
+      if (audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().then(() => {
+          console.log('✅ Audio context resumed')
+        }).catch((err) => {
+          console.error('❌ Error resuming audio context:', err)
+        })
+      }
+      
       const source = audioContextRef.current.createMediaStreamSource(stream)
       analyserRef.current = audioContextRef.current.createAnalyser()
       analyserRef.current.fftSize = 256

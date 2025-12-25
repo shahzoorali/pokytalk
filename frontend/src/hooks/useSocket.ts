@@ -85,12 +85,17 @@ async function detectCountry(): Promise<string | undefined> {
 export function useSocket() {
   const [socket, setSocket] = useState<Socket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
+  const [isReconnecting, setIsReconnecting] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [stats, setStats] = useState<ServerStats | null>(null)
   const [isWaiting, setIsWaiting] = useState(false)
   const [partner, setPartner] = useState<User | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  
+  // Preserve call state during disconnection
+  const preservedPartnerRef = useRef<User | null>(null)
+  const preservedSessionIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     console.log('Attempting to connect to:', BACKEND_URL)
@@ -98,25 +103,76 @@ export function useSocket() {
       transports: ['polling', 'websocket'],  // Try polling first, then upgrade to websocket
       autoConnect: true,
       withCredentials: true,
+      // Enhanced reconnection settings
+      reconnection: true,
+      reconnectionDelay: 1000, // Start with 1 second
+      reconnectionDelayMax: 10000, // Max 10 seconds between attempts
+      reconnectionAttempts: Infinity, // Keep trying indefinitely
+      timeout: 20000, // Connection timeout
     })
 
     newSocket.on('connect', async () => {
       setIsConnected(true)
-      console.log('Connected to server')
-      // Detect country before connecting user
-      const country = await detectCountry()
-      // Automatically connect user when socket connects
-      console.log('Emitting user:connect event', country ? `with country: ${country}` : 'without country')
-      newSocket.emit('user:connect', country ? { country } : {})
+      setIsReconnecting(false)
+      console.log('✅ Connected to server')
+      
+      // If we have preserved call state, try to restore it
+      if (preservedPartnerRef.current && preservedSessionIdRef.current) {
+        console.log('🔄 Restoring call state after reconnection')
+        setPartner(preservedPartnerRef.current)
+        setSessionId(preservedSessionIdRef.current)
+        // Re-request chat history if needed
+        if (preservedSessionIdRef.current) {
+          newSocket.emit('chat:history', preservedSessionIdRef.current)
+        }
+      } else {
+        // Only detect country and connect user if not in a call
+        const country = await detectCountry()
+        console.log('Emitting user:connect event', country ? `with country: ${country}` : 'without country')
+        newSocket.emit('user:connect', country ? { country } : {})
+      }
     })
 
-    newSocket.on('disconnect', () => {
+    newSocket.on('disconnect', (reason) => {
       setIsConnected(false)
-      setUser(null)
-      setPartner(null)
-      setSessionId(null)
+      console.log('❌ Disconnected from server:', reason)
+      
+      // Preserve call state if we're in a call
+      if (partner && sessionId) {
+        console.log('💾 Preserving call state during disconnect')
+        preservedPartnerRef.current = partner
+        preservedSessionIdRef.current = sessionId
+        setIsReconnecting(true)
+      } else {
+        // Only clear state if not in a call
+        setUser(null)
+        preservedPartnerRef.current = null
+        preservedSessionIdRef.current = null
+      }
+      
+      // Don't clear partner/sessionId on disconnect - preserve for reconnection
+      // Only clear waiting state
       setIsWaiting(false)
-      console.log('Disconnected from server')
+    })
+
+    newSocket.on('reconnect_attempt', (attemptNumber) => {
+      setIsReconnecting(true)
+      console.log(`🔄 Reconnection attempt ${attemptNumber}`)
+    })
+
+    newSocket.on('reconnect', (attemptNumber) => {
+      setIsReconnecting(false)
+      console.log(`✅ Reconnected after ${attemptNumber} attempts`)
+    })
+
+    newSocket.on('reconnect_error', (error) => {
+      console.log('⚠️ Reconnection error:', error)
+      setIsReconnecting(true)
+    })
+
+    newSocket.on('reconnect_failed', () => {
+      console.error('❌ Reconnection failed - will keep trying')
+      setIsReconnecting(true)
     })
 
     newSocket.on('user:connect', (userData: User) => {
@@ -138,6 +194,9 @@ export function useSocket() {
       })
       setPartner(partnerData)
       setSessionId(sessionId)
+      // Update preserved state
+      preservedPartnerRef.current = partnerData
+      preservedSessionIdRef.current = sessionId
       setIsWaiting(false)
       if (initiatorId) {
         // Store initiatorId on socket instance for quick access by components
@@ -151,6 +210,9 @@ export function useSocket() {
       setPartner(null)
       setSessionId(null)
       setMessages([])
+      // Clear preserved state
+      preservedPartnerRef.current = null
+      preservedSessionIdRef.current = null
       setIsWaiting(false) // Reset waiting state when call ends
       console.log('Call ended')
     })
@@ -233,6 +295,7 @@ export function useSocket() {
   return {
     socket,
     isConnected,
+    isReconnecting,
     user,
     stats,
     isWaiting,

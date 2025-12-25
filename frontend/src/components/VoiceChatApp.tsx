@@ -19,6 +19,7 @@ export function VoiceChatApp() {
   const {
     socket,
     isConnected,
+    isReconnecting,
     user,
     stats,
     isWaiting,
@@ -295,6 +296,121 @@ export function VoiceChatApp() {
     }
   }, [showFilters, sessionId, requestChatHistory])
 
+  // Handle page visibility changes (screen lock, background, etc.)
+  useEffect(() => {
+    if (!partner || !sessionId) return
+
+    let wakeLock: any = null
+
+    // Request wake lock to prevent screen from sleeping during call
+    const requestWakeLock = async () => {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await (navigator as any).wakeLock.request('screen')
+          console.log('✅ Wake lock acquired - screen will stay on')
+        } catch (err: any) {
+          console.log('⚠️ Wake lock not available:', err.message)
+        }
+      }
+    }
+
+    // Handle page visibility changes
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log('📱 Page hidden (screen locked/backgrounded) - keeping connections alive')
+        // Don't disconnect - connections will be maintained
+      } else {
+        console.log('📱 Page visible (screen unlocked/foregrounded)')
+        // Reconnect socket if disconnected
+        if (socket && !isConnected) {
+          console.log('🔄 Reconnecting socket after visibility change')
+          socket.connect()
+        }
+        // Resume audio context if suspended
+        if (localStream) {
+          const audioTracks = localStream.getAudioTracks()
+          audioTracks.forEach(track => {
+            if (track.enabled === false) {
+              track.enabled = true
+            }
+          })
+        }
+        // Re-request wake lock if released
+        if (wakeLock === null) {
+          requestWakeLock()
+        }
+      }
+    }
+
+    // Handle page freeze (iOS Safari)
+    const handlePageFreeze = () => {
+      console.log('❄️ Page frozen - preserving call state')
+    }
+
+    // Handle page resume (iOS Safari)
+    const handlePageResume = () => {
+      console.log('▶️ Page resumed - reconnecting if needed')
+      if (socket && !isConnected) {
+        socket.connect()
+      }
+    }
+
+    // Handle online/offline events
+    const handleOnline = () => {
+      console.log('🌐 Network online - reconnecting if needed')
+      if (socket && !isConnected) {
+        socket.connect()
+      }
+    }
+
+    const handleOffline = () => {
+      console.log('📴 Network offline - will reconnect when online')
+    }
+
+    // Request wake lock when call starts
+    requestWakeLock()
+
+    // Listen for visibility changes
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    // iOS Safari specific events
+    window.addEventListener('freeze', handlePageFreeze)
+    window.addEventListener('resume', handlePageResume)
+    
+    // Network state events
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('freeze', handlePageFreeze)
+      window.removeEventListener('resume', handlePageResume)
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+      
+      // Release wake lock when call ends
+      if (wakeLock) {
+        wakeLock.release().then(() => {
+          console.log('✅ Wake lock released')
+        }).catch((err: any) => {
+          console.log('⚠️ Error releasing wake lock:', err.message)
+        })
+      }
+    }
+  }, [partner, sessionId, socket, isConnected, localStream])
+
+  // Recover WebRTC connection after socket reconnects
+  useEffect(() => {
+    if (!isConnected || !partner || !sessionId || !localStream) return
+    if (peerSessionRef.current === sessionId) return // Already connected
+
+    // If socket reconnected and we have call state, recreate WebRTC peer
+    console.log('🔄 Socket reconnected during call - recovering WebRTC connection')
+    peerSessionRef.current = null // Reset to allow recreation
+    // The existing peer creation effect will handle recreating the connection
+  }, [isConnected, partner, sessionId, localStream])
+
   // Single page experience - show everything on one screen
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 relative overflow-hidden">
@@ -309,6 +425,7 @@ export function VoiceChatApp() {
         onStartCall={handleStartCall}
         stats={stats}
         isConnected={isConnected}
+        isReconnecting={isReconnecting}
         isInitialized={isInitialized}
         isWaiting={isWaiting}
         isLoading={isLoading}
@@ -333,9 +450,18 @@ export function VoiceChatApp() {
       />
 
       {/* Connection status indicator */}
-      {!isConnected && (
-        <div className="fixed top-4 right-4 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg z-50">
-          <p className="text-sm">Connecting to server...</p>
+      {(!isConnected || isReconnecting) && (
+        <div className={`fixed top-4 right-4 px-4 py-2 rounded-lg shadow-lg z-50 ${
+          isReconnecting ? 'bg-yellow-600' : 'bg-red-600'
+        } text-white`}>
+          <div className="flex items-center space-x-2">
+            {isReconnecting && (
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+            )}
+            <p className="text-sm">
+              {isReconnecting ? 'Reconnecting...' : 'Connecting to server...'}
+            </p>
+          </div>
         </div>
       )}
     </div>

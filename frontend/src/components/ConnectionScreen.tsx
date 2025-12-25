@@ -14,6 +14,7 @@ interface ConnectionScreenProps {
   onStartCall: (filters?: UserFilters) => void
   stats: ServerStats | null
   isConnected?: boolean
+  isReconnecting?: boolean
   isInitialized?: boolean
   isWaiting?: boolean
   isLoading?: boolean
@@ -41,6 +42,7 @@ export function ConnectionScreen({
   onStartCall, 
   stats,
   isConnected = true,
+  isReconnecting = false,
   isInitialized = false,
   isWaiting = false,
   isLoading: externalLoading = false,
@@ -360,12 +362,14 @@ export function ConnectionScreen({
                   {isInCall && (
                     <div className="flex items-center justify-center space-x-2">
                       <div className={`w-2 h-2 ${
+                        isReconnecting ? 'bg-yellow-500' :
                         connectionState === 'connected' ? 'bg-green-500' :
                         connectionState === 'connecting' ? 'bg-yellow-500' :
                         connectionState === 'failed' ? 'bg-red-500' : 'bg-gray-500'
                       } rounded-full animate-pulse`}></div>
                       <span className="text-white text-xs">
-                        {connectionState === 'connected' ? 'Connected' :
+                        {isReconnecting ? 'Reconnecting...' :
+                         connectionState === 'connected' ? 'Connected' :
                          connectionState === 'connecting' ? 'Connecting...' :
                          connectionState === 'failed' ? 'Connection Failed' : 'Disconnected'}
                       </span>
