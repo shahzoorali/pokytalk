@@ -15,6 +15,8 @@ import { BlockDialog } from './BlockDialog'
 import { NotificationModal } from './NotificationModal'
 import { CallHistorySidebar } from './CallHistorySidebar'
 import { CallbackRequestModal } from './CallbackRequestModal'
+import { HomepageInfoSection } from './HomepageInfoSection'
+import { BlogWidget } from './BlogWidget'
 
 interface ConnectionScreenProps {
   onStartCall: (filters?: UserFilters) => void
@@ -724,6 +726,14 @@ export function ConnectionScreen({
               </div>
             )}
           </div>
+
+          {/* Homepage Info Section and Blog Widget - Only show when not initialized */}
+          {!isInitialized && (
+            <>
+              <HomepageInfoSection />
+              <BlogWidget />
+            </>
+          )}
 
           {/* Hidden audio element for remote stream */}
           {isInCall && <audio ref={remoteAudioRef} autoPlay playsInline />}
