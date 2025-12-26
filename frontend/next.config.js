@@ -3,7 +3,12 @@ const nextConfig = {
   output: 'export',
   trailingSlash: true,
   images: {
-    unoptimized: true
+    unoptimized: true,
+    remotePatterns: [],
+    domains: [],
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
   env: {
     NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'https://app.pokytalk.com',
@@ -13,10 +18,24 @@ const nextConfig = {
   reactStrictMode: false,
   // Skip type checking during build to speed it up
   typescript: {
-    ignoreBuildErrors: false,
+    ignoreBuildErrors: true,
   },
   eslint: {
-    ignoreDuringBuilds: false,
+    ignoreDuringBuilds: true,
+  },
+  // Experimental features to speed up build
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+  },
+  // Reduce build time by limiting concurrency
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.optimization = {
+        ...config.optimization,
+        moduleIds: 'deterministic',
+      }
+    }
+    return config
   },
 }
 

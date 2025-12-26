@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import Link from 'next/link'
 import { Phone, Users, Globe, ChevronDown, ChevronUp, Mic, MicOff, MessageSquare, X, Send, Search, Gamepad2, Flag as FlagIcon, ShieldOff, History } from 'lucide-react'
 import { ServerStats, UserFilters, User, ChatMessage, ReportUserData, CallHistoryEntry } from '@/types'
 import { AudioLevelBar } from './AudioLevelBar'
@@ -321,15 +322,19 @@ export function ConnectionScreen({
       <div className="bg-gray-800 border-b border-gray-700 px-3 sm:px-4 py-2 sm:py-3">
         <div className="max-w-4xl mx-auto">
           {/* First Row: Title and Links */}
-          <div className="flex items-center justify-between mb-2 sm:mb-0">
-            <div className="flex items-center space-x-2 sm:space-x-3">
-              <h1 className="text-lg sm:text-2xl font-bold text-white">Pokytalk</h1>
+          <div className="flex items-center justify-between mb-2 sm:mb-0 flex-wrap gap-2">
+            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-shrink">
+              <Link href="/" className="text-lg sm:text-2xl font-bold text-white whitespace-nowrap hover:opacity-80 transition-opacity">Pokytalk</Link>
               <span className="hidden sm:inline text-gray-400 text-sm">Voice chat with random people</span>
             </div>
-            <div className="flex items-center space-x-2 sm:space-x-4 text-xs text-gray-400">
-              <a href="/privacy" className="hover:text-white transition-colors">Privacy</a>
+            <div className="flex items-center gap-1.5 sm:gap-4 text-xs text-gray-400 flex-shrink-0">
+              <a href="/blog" className="hover:text-white transition-colors whitespace-nowrap">Blog</a>
               <span className="hidden sm:inline">•</span>
-              <a href="/terms" className="hover:text-white transition-colors">Terms</a>
+              <span className="sm:hidden text-gray-600">|</span>
+              <a href="/privacy" className="hover:text-white transition-colors whitespace-nowrap">Privacy</a>
+              <span className="hidden sm:inline">•</span>
+              <span className="sm:hidden text-gray-600">|</span>
+              <a href="/terms" className="hover:text-white transition-colors whitespace-nowrap">Terms</a>
             </div>
           </div>
           
