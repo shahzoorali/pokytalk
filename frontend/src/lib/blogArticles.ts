@@ -135,6 +135,15 @@ export const articles: BlogArticle[] = [
     date: 'December 25, 2025',
     author: 'Pokytalk Team',
     featuredImage: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=1200&h=630&fit=crop'
+  },
+  {
+    slug: '15-fun-icebreakers-awkward-conversations',
+    title: '15 Fun Icebreakers for Awkward Conversation Moments',
+    excerpt: 'Transform uncomfortable silences into memorable connections with these 15 fun and creative icebreakers. Perfect for random chat platforms and making great first impressions.',
+    date: 'December 24, 2025',
+    author: 'Pokytalk Team',
+    featuredImage: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1200&h=630&fit=crop'
   }
 ]
+
 

@@ -177,4 +177,3 @@ export interface CallbackRequestResponse {
   status: 'accepted' | 'declined' | 'expired';
   message?: string;
 }
-
