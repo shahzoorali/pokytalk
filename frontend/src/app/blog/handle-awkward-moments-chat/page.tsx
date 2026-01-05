@@ -13,7 +13,7 @@ export default function HandleAwkwardMomentsChatArticle() {
         
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">
-            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=1200&h=630&fit=crop"
+            <img loading="lazy" decoding="async" src="/blog-images/unsplash-1507003211169.jpg"
               alt="How to handle awkward moments in random chats - practical guide"
               className="w-full h-auto"
             />
@@ -71,7 +71,7 @@ export default function HandleAwkwardMomentsChatArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1451187580459.jpg"
                   alt="Common awkward situations in random chats"
                   className="w-full rounded-lg mb-4"
                 />
@@ -131,7 +131,7 @@ export default function HandleAwkwardMomentsChatArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1551288049.jpg"
                   alt="Strategies for recovering from awkward moments"
                   className="w-full rounded-lg mb-4"
                 />

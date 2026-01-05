@@ -13,7 +13,7 @@ export default function CombatHarassmentRandomChatArticle() {
         
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">
-            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=1200&h=630&fit=crop"
+            <img loading="lazy" decoding="async" src="/blog-images/unsplash-1563013544.jpg"
               alt="How random chat platforms combat harassment - safety features explained"
               className="w-full h-auto"
             />
@@ -50,7 +50,7 @@ export default function CombatHarassmentRandomChatArticle() {
               </p>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1558494949.jpg"
                   alt="AI-powered moderation systems for detecting harassment"
                   className="w-full rounded-lg mb-4"
                 />

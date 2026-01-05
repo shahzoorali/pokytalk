@@ -13,7 +13,7 @@ export default function PsychologyTalkingStrangersArticle() {
         
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">
-            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1200&h=630&fit=crop"
+            <img loading="lazy" decoding="async" src="/blog-images/unsplash-1522202176988.jpg"
               alt="The psychology behind why people talk to strangers online"
               className="w-full h-auto"
             />
@@ -50,7 +50,7 @@ export default function PsychologyTalkingStrangersArticle() {
               </p>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1521737604893.jpg"
                   alt="Maslow's hierarchy showing the need for social connection"
                   className="w-full rounded-lg mb-4"
                 />
@@ -106,7 +106,7 @@ export default function PsychologyTalkingStrangersArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1589829545856.jpg"
                   alt="Psychological benefits of anonymous online interaction"
                   className="w-full rounded-lg mb-4"
                 />
@@ -149,7 +149,7 @@ export default function PsychologyTalkingStrangersArticle() {
               </p>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1451187580459.jpg"
                   alt="How novelty seeking drives random chat usage"
                   className="w-full rounded-lg mb-4"
                 />
@@ -231,7 +231,7 @@ export default function PsychologyTalkingStrangersArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1507003211169.jpg"
                   alt="How random chat facilitates identity exploration"
                   className="w-full rounded-lg mb-4"
                 />

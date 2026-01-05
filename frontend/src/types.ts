@@ -140,11 +140,7 @@ export interface CallHistoryEntry {
   timestamp: Date;
   duration: number; // in seconds
   country?: string;
-}
-
-export type CallbackRequestStatus = 'pending' | 'accepted' | 'declined' | 'expired';
-
-export interface CallbackRequest {
+}export type CallbackRequestStatus = 'pending' | 'accepted' | 'declined' | 'expired';export interface CallbackRequest {
   requestId: string;
   fromUserId: string;
   toUserId: string;

@@ -14,7 +14,7 @@ export default function BestOmegleAlternativesArticle() {
         <article className="prose prose-invert max-w-none">
           {/* Featured Image */}
           <div className="mb-8 rounded-lg overflow-hidden">
-            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=1200&h=630&fit=crop"
+            <img loading="lazy" decoding="async" src="/blog-images/unsplash-1521737604893.jpg"
               alt="Best Omegle alternatives for random video and voice chat in 2025"
               className="w-full h-auto"
             />
@@ -70,7 +70,7 @@ export default function BestOmegleAlternativesArticle() {
               <h2 className="text-3xl font-bold text-white mb-6">Top Omegle Alternatives: Detailed Comparison</h2>
               
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1460925895917.jpg"
                   alt="Comparison chart of top Omegle alternatives showing features and ratings"
                   className="w-full rounded-lg mb-4"
                 />
@@ -180,7 +180,7 @@ export default function BestOmegleAlternativesArticle() {
               <h2 className="text-3xl font-bold text-white mb-6">Specialized Platforms</h2>
               
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1551288049.jpg"
                   alt="Different types of specialized random chat platforms"
                   className="w-full rounded-lg mb-4"
                 />
@@ -229,7 +229,7 @@ export default function BestOmegleAlternativesArticle() {
               <h2 className="text-3xl font-bold text-white mb-6">Choosing the Right Platform for You</h2>
               
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1551650975-87deedd944c3?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1551650975.jpg"
                   alt="Decision tree for choosing the right random chat platform"
                   className="w-full rounded-lg mb-4"
                 />
@@ -272,7 +272,7 @@ export default function BestOmegleAlternativesArticle() {
               </ul>
               
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1485827404703.jpg"
                   alt="Future trends in random chat platforms including VR and AI"
                   className="w-full rounded-lg mb-4"
                 />

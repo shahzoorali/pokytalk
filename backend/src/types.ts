@@ -160,9 +160,7 @@ export interface CallbackRequestData {
   toUserId: string;
   originalCallTimestamp?: Date;
   originalCallCountry?: string;
-}
-
-export interface CallbackRequest {
+}export interface CallbackRequest {
   id: string;
   fromUserId: string;
   toUserId: string;
@@ -170,9 +168,7 @@ export interface CallbackRequest {
   status: 'pending' | 'accepted' | 'declined' | 'expired';
   originalCallTimestamp?: Date;
   originalCallCountry?: string;
-}
-
-export interface CallbackRequestResponse {
+}export interface CallbackRequestResponse {
   requestId: string;
   status: 'accepted' | 'declined' | 'expired';
   message?: string;

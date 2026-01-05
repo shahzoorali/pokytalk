@@ -13,7 +13,7 @@ export default function PracticeLanguagesOnlineArticle() {
         
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">
-            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=1200&h=630&fit=crop"
+            <img loading="lazy" decoding="async" src="/blog-images/unsplash-1521737604893.jpg"
               alt="How to practice languages with native speakers online through voice chat"
               className="w-full h-auto"
             />
@@ -50,7 +50,7 @@ export default function PracticeLanguagesOnlineArticle() {
               </p>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1522202176988.jpg"
                   alt="Benefits of practicing languages with native speakers"
                   className="w-full rounded-lg mb-4"
                 />
@@ -128,7 +128,7 @@ export default function PracticeLanguagesOnlineArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1460925895917.jpg"
                   alt="Comparison of platforms for language practice"
                   className="w-full rounded-lg mb-4"
                 />
@@ -164,7 +164,7 @@ export default function PracticeLanguagesOnlineArticle() {
               </div>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1589829545856.jpg"
                   alt="Checklist for preparing language practice conversations"
                   className="w-full rounded-lg mb-4"
                 />
@@ -241,7 +241,7 @@ export default function PracticeLanguagesOnlineArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1503676260728.jpg"
                   alt="Strategies for learning from mistakes in language practice"
                   className="w-full rounded-lg mb-4"
                 />
@@ -308,7 +308,7 @@ export default function PracticeLanguagesOnlineArticle() {
               </p>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1485827404703.jpg"
                   alt="Advanced language learning techniques for conversation practice"
                   className="w-full rounded-lg mb-4"
                 />

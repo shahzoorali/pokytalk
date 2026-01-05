@@ -13,7 +13,7 @@ export default function ConversationStartersRandomChatArticle() {
         
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">
-            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1200&h=630&fit=crop"
+            <img loading="lazy" decoding="async" src="/blog-images/unsplash-1522202176988.jpg"
               alt="50 conversation starters for random chats - breaking the ice"
               className="w-full h-auto"
             />
@@ -57,7 +57,7 @@ export default function ConversationStartersRandomChatArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1521737604893.jpg"
                   alt="Why conversation starters are important for random chats"
                   className="w-full rounded-lg mb-4"
                 />
@@ -110,7 +110,7 @@ export default function ConversationStartersRandomChatArticle() {
               </ol>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1460925895917.jpg"
                   alt="Categories of conversation starters for different situations"
                   className="w-full rounded-lg mb-4"
                 />
@@ -169,7 +169,7 @@ export default function ConversationStartersRandomChatArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1551288049.jpg"
                   alt="How to use conversation starters effectively"
                   className="w-full rounded-lg mb-4"
                 />

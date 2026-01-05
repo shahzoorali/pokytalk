@@ -13,7 +13,7 @@ export default function WhyPeopleUseRandomChatArticle() {
         
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">
-            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=1200&h=630&fit=crop"
+            <img loading="lazy" decoding="async" src="/blog-images/unsplash-1521737604893.jpg"
               alt="Why people use random chat platforms - understanding the appeal"
               className="w-full h-auto"
             />
@@ -50,7 +50,7 @@ export default function WhyPeopleUseRandomChatArticle() {
               </p>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1522202176988.jpg"
                   alt="The human need for connection drives random chat usage"
                   className="w-full rounded-lg mb-4"
                 />
@@ -101,7 +101,7 @@ export default function WhyPeopleUseRandomChatArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1503676260728.jpg"
                   alt="Language learning is a major motivation for random chat usage"
                   className="w-full rounded-lg mb-4"
                 />

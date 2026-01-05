@@ -13,7 +13,7 @@ export default function FutureRandomChatArticle() {
         
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">
-            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1200&h=630&fit=crop"
+            <img loading="lazy" decoding="async" src="/blog-images/unsplash-1485827404703.jpg"
               alt="The future of random chat - trends and predictions for 2025 and beyond"
               className="w-full h-auto"
             />
@@ -50,7 +50,7 @@ export default function FutureRandomChatArticle() {
               </p>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1451187580459.jpg"
                   alt="AI integration in random chat platforms"
                   className="w-full rounded-lg mb-4"
                 />

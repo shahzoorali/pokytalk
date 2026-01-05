@@ -13,7 +13,7 @@ export default function Top10RandomChatAppsArticle() {
         
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">
-            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=630&fit=crop"
+            <img loading="lazy" decoding="async" src="/blog-images/unsplash-1551288049.jpg"
               alt="Top 10 random chat apps for making friends in 2025"
               className="w-full h-auto"
             />
@@ -57,7 +57,7 @@ export default function Top10RandomChatAppsArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1460925895917.jpg"
                   alt="Evaluation criteria for random chat apps"
                   className="w-full rounded-lg mb-4"
                 />
@@ -231,7 +231,7 @@ export default function Top10RandomChatAppsArticle() {
               </div>
 
               <div className="mb-8 mt-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1551650975-87deedd944c3?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1551650975.jpg"
                   alt="Side-by-side comparison of top random chat apps"
                   className="w-full rounded-lg mb-4"
                 />
@@ -255,7 +255,7 @@ export default function Top10RandomChatAppsArticle() {
               </p>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1485827404703.jpg"
                   alt="Specialized platforms for making friends"
                   className="w-full rounded-lg mb-4"
                 />

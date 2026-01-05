@@ -13,7 +13,7 @@ export default function CulturalExchangeRandomChatArticle() {
         
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">
-            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1200&h=630&fit=crop"
+            <img loading="lazy" decoding="async" src="/blog-images/unsplash-1522202176988.jpg"
               alt="Cultural exchange through random chat platforms - connecting worlds"
               className="w-full h-auto"
             />
@@ -50,7 +50,7 @@ export default function CulturalExchangeRandomChatArticle() {
               </p>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1521737604893.jpg"
                   alt="Direct cultural contact through random chat"
                   className="w-full rounded-lg mb-4"
                 />
@@ -111,7 +111,7 @@ export default function CulturalExchangeRandomChatArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1551288049.jpg"
                   alt="Strategies for engaging in cultural exchange"
                   className="w-full rounded-lg mb-4"
                 />

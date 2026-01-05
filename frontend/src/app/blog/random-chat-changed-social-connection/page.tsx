@@ -13,7 +13,7 @@ export default function RandomChatChangedSocialConnectionArticle() {
         
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">
-            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=1200&h=630&fit=crop"
+            <img loading="lazy" decoding="async" src="/blog-images/unsplash-1521737604893.jpg"
               alt="How random chat platforms changed social connection forever"
               className="w-full h-auto"
             />
@@ -57,7 +57,7 @@ export default function RandomChatChangedSocialConnectionArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1451187580459.jpg"
                   alt="Evolution of social connection from physical to digital"
                   className="w-full rounded-lg mb-4"
                 />
@@ -137,7 +137,7 @@ export default function RandomChatChangedSocialConnectionArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1507003211169.jpg"
                   alt="How random chat reduces social anxiety"
                   className="w-full rounded-lg mb-4"
                 />
@@ -181,7 +181,7 @@ export default function RandomChatChangedSocialConnectionArticle() {
               </p>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1522202176988.jpg"
                   alt="How random chat breaks down cultural barriers"
                   className="w-full rounded-lg mb-4"
                 />
@@ -273,7 +273,7 @@ export default function RandomChatChangedSocialConnectionArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1551288049.jpg"
                   alt="Evolution of friendship in the digital age"
                   className="w-full rounded-lg mb-4"
                 />

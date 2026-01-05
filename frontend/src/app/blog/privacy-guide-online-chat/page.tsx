@@ -13,7 +13,7 @@ export default function PrivacyGuideOnlineChatArticle() {
         
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">
-            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=1200&h=630&fit=crop"
+            <img loading="lazy" decoding="async" src="/blog-images/unsplash-1589829545856.jpg"
               alt="Privacy guide for online chat platforms - protecting your information"
               className="w-full h-auto"
             />
@@ -50,7 +50,7 @@ export default function PrivacyGuideOnlineChatArticle() {
               </p>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1451187580459.jpg"
                   alt="Types of data collected by online chat platforms"
                   className="w-full rounded-lg mb-4"
                 />
@@ -116,7 +116,7 @@ export default function PrivacyGuideOnlineChatArticle() {
               </div>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1507003211169.jpg"
                   alt="Guide to what information is safe to share online"
                   className="w-full rounded-lg mb-4"
                 />
@@ -183,7 +183,7 @@ export default function PrivacyGuideOnlineChatArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1551650975-87deedd944c3?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1551650975.jpg"
                   alt="Comparison of anonymous vs registered accounts for privacy"
                   className="w-full rounded-lg mb-4"
                 />
@@ -296,7 +296,7 @@ export default function PrivacyGuideOnlineChatArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1485827404703.jpg"
                   alt="Technical measures for protecting privacy online"
                   className="w-full rounded-lg mb-4"
                 />

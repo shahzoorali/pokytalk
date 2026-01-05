@@ -13,7 +13,7 @@ export default function RandomChatEtiquetteArticle() {
         
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">
-            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1200&h=630&fit=crop"
+            <img loading="lazy" decoding="async" src="/blog-images/unsplash-1522202176988.jpg"
               alt="Random chat etiquette - complete guide to do's and don'ts"
               className="w-full h-auto"
             />
@@ -63,7 +63,7 @@ export default function RandomChatEtiquetteArticle() {
               </ul>
 
               <div className="mb-8">
-                <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&h=600&fit=crop"
+                <img loading="lazy" decoding="async" src="/blog-images/unsplash-1460925895917.jpg"
                   alt="Do's and don'ts of random chat etiquette"
                   className="w-full rounded-lg mb-4"
                 />
