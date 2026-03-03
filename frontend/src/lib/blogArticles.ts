@@ -9,6 +9,14 @@ export interface BlogArticle {
 
 export const articles: BlogArticle[] = [
   {
+    slug: 'why-talking-to-strangers-is-good-for-soul',
+    title: 'Why Talking to Strangers is Good for Your Soul',
+    excerpt: 'In an increasingly isolated world, stepping outside your social bubble to connect with someone new can be a powerful act of self-care. Discover the surprising emotional benefits of spontaneous conversations.',
+    date: 'March 3, 2026',
+    author: 'Pokytalk Team',
+    featuredImage: '/blog-images/unsplash-1511512578047.jpg'
+  },
+  {
     slug: 'using-random-chat-platforms-language-exchange',
     title: 'Using Random Chat Platforms for Language Exchange: A Comprehensive Guide',
     excerpt: 'Master language learning through authentic conversations with native speakers. Discover how to effectively use random chat platforms for language exchange, from finding partners to building fluency.',
