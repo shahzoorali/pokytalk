@@ -15,7 +15,9 @@ export class UserManager {
   private recentMatches: Map<string, Set<string>> = new Map(); // userId -> Set of recently matched user IDs
   // Track waiting users with their filters and attempt counts for fallback logic
   private waitingUserInfo: Map<string, WaitingUserInfo> = new Map(); // userId -> WaitingUserInfo
-  private readonly MATCH_COOLDOWN_MS = 1000; // 1 second cooldown (for testing - set to 5 * 60 * 1000 for production)
+  // Prevent concurrent matching of the same user by the periodic matching loop
+  private matchingLock: Set<string> = new Set();
+  private readonly MATCH_COOLDOWN_MS = 120_000; // 2 minute cooldown between re-matching same pair
   private readonly MAX_FILTER_ATTEMPTS = 4; // After 4 attempts, fallback to matching without filters
 
   createUser(socketId: string, age?: number, country?: string): User {
@@ -195,6 +197,26 @@ export class UserManager {
         this.recentMatches.delete(user2Id);
       }
     }, this.MATCH_COOLDOWN_MS);
+  }
+
+  /**
+   * Lock a user to prevent concurrent matching attempts.
+   * Returns true if the lock was acquired, false if already locked.
+   */
+  lockForMatching(userId: string): boolean {
+    if (this.matchingLock.has(userId)) {
+      return false;
+    }
+    this.matchingLock.add(userId);
+    return true;
+  }
+
+  unlockForMatching(userId: string): void {
+    this.matchingLock.delete(userId);
+  }
+
+  isLockedForMatching(userId: string): boolean {
+    return this.matchingLock.has(userId);
   }
 
   getAllUsers(): User[] {

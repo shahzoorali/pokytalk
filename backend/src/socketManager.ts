@@ -8,6 +8,9 @@ import { CallbackManager } from './callbackManager';
 import { User, UserFilters, WebRTCMessage, ChatMessage, HangmanSetWordData, HangmanGuessData, ReportUserData, CallbackRequestData } from './types';
 
 export class SocketManager {
+  // Track pending WebRTC connection timeouts: sessionId -> timeout handle
+  private webrtcTimeouts: Map<string, NodeJS.Timeout> = new Map();
+
   constructor(
     private io: Server,
     private userManager: UserManager,
@@ -30,7 +33,7 @@ export class SocketManager {
       // Handle user connection
       socket.on('user:connect', async (data: { age?: number; country?: string }) => {
         console.log(`📝 User connect request from ${socket.id}:`, data);
-        
+
         try {
           // Auto-detect country from IP if not provided
           let detectedCountry = data.country;
@@ -45,7 +48,7 @@ export class SocketManager {
             } else if (socket.request.socket.remoteAddress) {
               clientIP = socket.request.socket.remoteAddress;
             }
-            
+
             if (clientIP) {
               console.log(`🌍 Detecting country for IP: ${clientIP}`);
               detectedCountry = await this.userManager.getCountryByIP(clientIP) || undefined;
@@ -56,16 +59,16 @@ export class SocketManager {
               }
             }
           }
-          
+
           const user = this.userManager.createUser(socket.id, data.age, detectedCountry);
           socket.data.userId = user.id;
-          
+
           socket.emit('user:connect', user);
           this.updateStats();
-          
+
           // Emit user:online event for call history tracking
           this.io.emit('user:online', user.id);
-          
+
           console.log(`✅ User connected successfully: ${user.id} (Age: ${user.age}, Country: ${user.country || 'Not detected'})`);
         } catch (error) {
           console.error(`❌ Error creating user for ${socket.id}:`, error);
@@ -76,7 +79,7 @@ export class SocketManager {
       socket.on('call:request', (filters: UserFilters) => {
         const userId = socket.data.userId;
         console.log(`📞 Call request from ${userId} (${socket.id}) with filters:`, filters);
-        
+
         if (!userId) {
           console.error(`❌ No userId found for socket ${socket.id}`);
           return;
@@ -95,7 +98,7 @@ export class SocketManager {
 
         // Try to find a partner (with filters first)
         this.attemptMatch(userId, socket, filters);
-        
+
         // Also try to match other waiting users with this new user
         this.tryMatchWaitingUsers(userId);
       });
@@ -104,7 +107,7 @@ export class SocketManager {
       socket.on('call:end', () => {
         const userId = socket.data.userId;
         console.log(`📞 Call end request from ${userId} (${socket.id})`);
-        
+
         if (!userId) {
           console.error(`❌ No userId found for socket ${socket.id}`);
           return;
@@ -116,50 +119,49 @@ export class SocketManager {
           return;
         }
 
-        if (!user.partnerId) {
-          console.log(`⚠️ User ${userId} has no partner, removing from queue`);
-          this.userManager.removeFromQueue(userId);
-          this.updateStats();
-          return;
-        }
-
-        const session = this.callManager.getSessionByUser(userId);
-        if (session) {
+        // Always try to find and end an active session for this user,
+        // regardless of partnerId state (fixes race where partnerId is stale)
+        const result = this.callManager.forceEndSessionByUser(userId);
+        if (result) {
+          const { session, partnerId } = result;
           console.log(`📋 Ending session: ${session.id}`);
-          
+
+          // Cancel the WebRTC connection timeout if pending
+          this.clearWebRTCTimeout(session.id);
+
           // Clean up any active games for this session
           this.gameManager.cleanupSession(session.id);
-          
-          this.callManager.endSession(session.id);
-          
-          // Notify both users about call end
-          socket.emit('call:ended', session.id); // Notify the user who initiated the hang up
-          
+
+          // Notify the user who initiated the hang up
+          socket.emit('call:ended', session.id, 'normal');
+
           // Notify partner
-          const partner = this.userManager.getUser(user.partnerId);
+          const partner = this.userManager.getUser(partnerId);
           if (partner) {
             console.log(`📢 Notifying partner ${partner.id} about call end`);
-            this.io.to(partner.socketId).emit('call:ended', session.id);
+            this.io.to(partner.socketId).emit('call:ended', session.id, 'partner_disconnect');
             this.userManager.updateUser(partner.id, { isInCall: false, partnerId: undefined });
-            
+
             // Check for pending callback requests for the partner
             this.checkPendingCallbackRequests(partner.id);
           } else {
-            console.error(`❌ Partner not found: ${user.partnerId}`);
+            console.error(`❌ Partner not found: ${partnerId}`);
           }
-          
+
           // Check for pending callback requests for the user who ended the call
           this.checkPendingCallbackRequests(userId);
         } else {
-          console.error(`❌ Session not found for user: ${userId}`);
-          // Even if no session, still notify the user to clear their state
-          socket.emit('call:ended', '');
+          console.log(`⚠️ No active session for user ${userId}, removing from queue`);
+          this.userManager.removeFromQueue(userId);
+          // Still notify the user to clear their state
+          socket.emit('call:ended', '', 'normal');
         }
 
         // Update user state
         this.userManager.updateUser(userId, { isInCall: false, partnerId: undefined });
+        this.userManager.unlockForMatching(userId);
         this.updateStats();
-        
+
         console.log(`✅ Call ended successfully: ${userId}`);
       });
 
@@ -175,7 +177,7 @@ export class SocketManager {
           sdpPreview: offer.sdp?.sdp?.substring(0, 100) + '...',
           fullSdp: offer.sdp
         });
-        
+
         const partner = this.userManager.getUser(offer.to);
         if (partner) {
           console.log(`📤 Forwarding offer to partner ${partner.id} (${partner.socketId})`);
@@ -196,7 +198,7 @@ export class SocketManager {
           sdpPreview: answer.sdp?.sdp?.substring(0, 100) + '...',
           fullSdp: answer.sdp
         });
-        
+
         const partner = this.userManager.getUser(answer.to);
         if (partner) {
           console.log(`📤 Forwarding answer to partner ${partner.id} (${partner.socketId})`);
@@ -216,7 +218,7 @@ export class SocketManager {
           candidateData: candidate.candidate,
           candidatePreview: candidate.candidate?.candidate?.substring(0, 100) + '...'
         });
-        
+
         const partner = this.userManager.getUser(candidate.to);
         if (partner) {
           console.log(`📤 Forwarding ICE candidate to partner ${partner.id} (${partner.socketId})`);
@@ -226,6 +228,15 @@ export class SocketManager {
         }
       });
 
+      // Handle WebRTC connection confirmation from client
+      socket.on('call:webrtc-connected', (data: { sessionId: string }) => {
+        const userId = socket.data.userId;
+        console.log(`✅ WebRTC P2P connection confirmed by ${userId} for session ${data.sessionId}`);
+
+        // Clear the connection timeout — the call is successfully connected
+        this.clearWebRTCTimeout(data.sessionId);
+      });
+
       // Handle chat messages
       socket.on('chat:message', (data: { sessionId: string; content: string }) => {
         const userId = socket.data.userId;
@@ -233,7 +244,7 @@ export class SocketManager {
           contentLength: data.content.length,
           content: data.content.substring(0, 50) + (data.content.length > 50 ? '...' : '')
         });
-        
+
         if (!userId) {
           console.error(`❌ No userId found for chat message from socket ${socket.id}`);
           return;
@@ -241,10 +252,10 @@ export class SocketManager {
 
         // Check for suspicious behavior
         const detection = this.moderationManager.detectSuspiciousBehavior(data.content);
-        
+
         if (detection.isSuspicious) {
           console.log(`⚠️ Suspicious message detected from ${userId}:`, detection.reasons);
-          
+
           // Notify partner about suspicious behavior
           const partnerId = this.callManager.getPartnerId(data.sessionId, userId);
           if (partnerId) {
@@ -292,7 +303,7 @@ export class SocketManager {
       socket.on('chat:history', (sessionId: string) => {
         const userId = socket.data.userId;
         console.log(`📚 Chat history request from ${userId} for session ${sessionId}`);
-        
+
         const messages = this.callManager.getSessionMessages(sessionId);
         console.log(`📤 Sending ${messages.length} messages to ${userId}`);
         socket.emit('chat:history', messages);
@@ -304,7 +315,7 @@ export class SocketManager {
       socket.on('user:report', (data: ReportUserData) => {
         const userId = socket.data.userId;
         console.log(`🚨 User report from ${userId} against ${data.reportedUserId}:`, data.reason);
-        
+
         if (!userId) {
           console.error(`❌ No userId found for report from socket ${socket.id}`);
           socket.emit('user:report:error', 'Not authenticated');
@@ -364,7 +375,7 @@ export class SocketManager {
       socket.on('user:block', (blockedUserId: string) => {
         const userId = socket.data.userId;
         console.log(`🚫 Block request from ${userId} for ${blockedUserId}`);
-        
+
         if (!userId) {
           socket.emit('user:block:error', 'Not authenticated');
           return;
@@ -388,7 +399,7 @@ export class SocketManager {
         const allRequests = this.callbackManager.getAllUserRequests(userId);
         allRequests.forEach(req => {
           if ((req.fromUserId === userId && req.toUserId === blockedUserId) ||
-              (req.fromUserId === blockedUserId && req.toUserId === userId)) {
+            (req.fromUserId === blockedUserId && req.toUserId === userId)) {
             this.callbackManager.cancelRequest(req.id);
             // Notify the other user if they're online
             const otherUserId = req.fromUserId === userId ? req.toUserId : req.fromUserId;
@@ -416,7 +427,7 @@ export class SocketManager {
       // Handle user unblock
       socket.on('user:unblock', (unblockedUserId: string) => {
         const userId = socket.data.userId;
-        
+
         if (!userId) {
           socket.emit('user:unblock:error', 'Not authenticated');
           return;
@@ -429,7 +440,7 @@ export class SocketManager {
       // Get blocked users list
       socket.on('user:blocked:list', () => {
         const userId = socket.data.userId;
-        
+
         if (!userId) {
           socket.emit('user:blocked:list:error', 'Not authenticated');
           return;
@@ -442,14 +453,14 @@ export class SocketManager {
       // Handle callback request
       socket.on('callback:request', (data: CallbackRequestData) => {
         const userId = socket.data.userId;
-        
+
         if (!userId) {
           socket.emit('callback:request:error', { message: 'Not authenticated' });
           return;
         }
 
         const { toUserId, originalCallTimestamp, originalCallCountry } = data;
-        
+
         // Validate toUserId
         if (!toUserId || typeof toUserId !== 'string' || toUserId.trim() === '') {
           socket.emit('callback:request:error', { message: 'Invalid user ID' });
@@ -466,7 +477,7 @@ export class SocketManager {
             validatedTimestamp = date;
           }
         }
-        
+
         // Validate target user exists
         const targetUser = this.userManager.getUser(toUserId);
         if (!targetUser) {
@@ -492,11 +503,11 @@ export class SocketManager {
         // Check if reverse request already exists
         const reverseRequests = this.callbackManager.getPendingRequestsSent(toUserId);
         const existingReverseRequest = reverseRequests.find(req => req.toUserId === userId);
-        
+
         if (existingReverseRequest) {
           // Mutual callback detected - auto-match immediately
           console.log(`🤝 Mutual callback detected between ${userId} and ${toUserId}`);
-          
+
           // Create call session immediately
           const session = this.callManager.createSession(userId, toUserId);
           if (!session) {
@@ -519,7 +530,7 @@ export class SocketManager {
           if (user1 && user2) {
             // Determine initiator (use userId comparison for consistency)
             const initiatorId = userId < toUserId ? userId : toUserId;
-            
+
             // Notify both users
             this.io.to(user1.socketId).emit('callback:mutual', {
               partner: user2,
@@ -551,7 +562,7 @@ export class SocketManager {
         if (mutualRequest) {
           // Auto-match - both users want to call each other
           console.log(`🤝 Mutual callback detected between ${userId} and ${toUserId}`);
-          
+
           // Create call session immediately
           const session = this.callManager.createSession(userId, toUserId);
           if (!session) {
@@ -574,7 +585,7 @@ export class SocketManager {
           if (user1 && user2) {
             // Determine initiator (use userId comparison for consistency)
             const initiatorId = userId < toUserId ? userId : toUserId;
-            
+
             // Notify both users
             this.io.to(user1.socketId).emit('callback:mutual', {
               partner: user2,
@@ -625,7 +636,7 @@ export class SocketManager {
 
         // Create callback request
         const request = this.callbackManager.createRequest(userId, toUserId, validatedTimestamp, originalCallCountry);
-        
+
         // Notify requester
         socket.emit('callback:request:sent', {
           requestId: request.id,
@@ -648,7 +659,7 @@ export class SocketManager {
       // Handle callback accept
       socket.on('callback:accept', (requestId: string) => {
         const userId = socket.data.userId;
-        
+
         if (!userId) {
           socket.emit('callback:accept:error', { message: 'Not authenticated' });
           return;
@@ -674,7 +685,7 @@ export class SocketManager {
 
         // Re-check block status (users might have blocked each other since request was sent)
         if (this.moderationManager.isBlocked(userId, request.fromUserId) ||
-            this.moderationManager.isBlocked(request.fromUserId, userId)) {
+          this.moderationManager.isBlocked(request.fromUserId, userId)) {
           socket.emit('callback:accept:error', { message: 'Cannot accept callback' });
           return;
         }
@@ -750,7 +761,7 @@ export class SocketManager {
       // Handle callback decline
       socket.on('callback:decline', (requestId: string) => {
         const userId = socket.data.userId;
-        
+
         if (!userId) {
           socket.emit('callback:decline:error', { message: 'Not authenticated' });
           return;
@@ -790,7 +801,7 @@ export class SocketManager {
       // Handle callback cancel
       socket.on('callback:cancel', (requestId: string) => {
         const userId = socket.data.userId;
-        
+
         if (!userId) {
           socket.emit('callback:cancel:error', { message: 'Not authenticated' });
           return;
@@ -843,7 +854,7 @@ export class SocketManager {
       socket.on('audio:mute', (isMuted: boolean) => {
         const userId = socket.data.userId;
         console.log(`🔇 Mute toggle from ${userId}: ${isMuted}`);
-        
+
         if (userId) {
           this.userManager.updateUser(userId, { isMuted });
         }
@@ -855,7 +866,7 @@ export class SocketManager {
       socket.on('game:invite', (data: { sessionId: string; gameType: 'hangman' }) => {
         const userId = socket.data.userId;
         console.log(`🎮 Game invite from ${userId} for session ${data.sessionId}`);
-        
+
         if (!userId) {
           console.error(`❌ No userId found for game invite from socket ${socket.id}`);
           return;
@@ -904,7 +915,7 @@ export class SocketManager {
       socket.on('game:accept', (data: { inviteId: string }) => {
         const userId = socket.data.userId;
         console.log(`🎮 Game accept from ${userId} for invite ${data.inviteId}`);
-        
+
         if (!userId) {
           console.error(`❌ No userId found for game accept from socket ${socket.id}`);
           return;
@@ -960,7 +971,7 @@ export class SocketManager {
       socket.on('game:decline', (data: { inviteId: string }) => {
         const userId = socket.data.userId;
         console.log(`🎮 Game decline from ${userId} for invite ${data.inviteId}`);
-        
+
         const invite = this.gameManager.getInvite(data.inviteId);
         if (!invite) return;
 
@@ -977,7 +988,7 @@ export class SocketManager {
       socket.on('game:set-word', (data: HangmanSetWordData) => {
         const userId = socket.data.userId;
         console.log(`🎮 Set word from ${userId} for game ${data.gameId}`);
-        
+
         if (!userId) {
           console.error(`❌ No userId found for set-word from socket ${socket.id}`);
           return;
@@ -1023,7 +1034,7 @@ export class SocketManager {
       socket.on('game:guess', (data: HangmanGuessData) => {
         const userId = socket.data.userId;
         console.log(`🎮 Guess from ${userId} for game ${data.gameId}: "${data.guess}" (full word: ${data.isFullWordGuess})`);
-        
+
         if (!userId) {
           console.error(`❌ No userId found for guess from socket ${socket.id}`);
           return;
@@ -1095,7 +1106,7 @@ export class SocketManager {
       socket.on('game:end', (data: { gameId: string }) => {
         const userId = socket.data.userId;
         console.log(`🎮 Game end request from ${userId} for game ${data.gameId}`);
-        
+
         const game = this.gameManager.getGame(data.gameId);
         if (!game) return;
 
@@ -1129,7 +1140,7 @@ export class SocketManager {
       socket.on('game:rematch', (data: { sessionId: string }) => {
         const userId = socket.data.userId;
         console.log(`🎮 Rematch request from ${userId} for session ${data.sessionId}`);
-        
+
         if (!userId) return;
 
         const user = this.userManager.getUser(userId);
@@ -1140,7 +1151,7 @@ export class SocketManager {
 
         // Get the previous game to swap roles
         const prevGame = this.gameManager.getGameBySession(data.sessionId);
-        
+
         // Create invite with swapped roles hint
         const inviteId = this.gameManager.createInvite(userId, user.partnerId, data.sessionId);
 
@@ -1160,7 +1171,7 @@ export class SocketManager {
       socket.on('game:rematch-accept', (data: { inviteId: string; prevSetterId?: string }) => {
         const userId = socket.data.userId;
         console.log(`🎮 Rematch accept from ${userId}`);
-        
+
         if (!userId) return;
 
         const invite = this.gameManager.getInvite(data.inviteId);
@@ -1202,35 +1213,31 @@ export class SocketManager {
       socket.on('disconnect', (reason) => {
         const userId = socket.data.userId;
         console.log(`🔌 Disconnect: ${socket.id} (${userId}) - Reason: ${reason}`);
-        
+
         if (userId) {
           const user = this.userManager.getUser(userId);
           if (user) {
             console.log(`👤 Processing disconnect for user: ${userId}`);
-            
-            // End any active call
-            if (user.isInCall && user.partnerId) {
-              console.log(`📞 Ending active call for disconnected user ${userId} with partner ${user.partnerId}`);
-              
-              const session = this.callManager.getSessionByUser(userId);
-              if (session) {
-                console.log(`📋 Ending session: ${session.id}`);
-                
-                // Clean up any active games for this session
-                this.gameManager.cleanupSession(session.id);
-                
-                this.callManager.endSession(session.id);
-                
-                const partner = this.userManager.getUser(user.partnerId);
-                if (partner) {
-                  console.log(`📢 Notifying partner ${partner.id} about disconnect`);
-                  this.io.to(partner.socketId).emit('call:ended', session.id);
-                  this.userManager.updateUser(partner.id, { isInCall: false, partnerId: undefined });
-                } else {
-                  console.error(`❌ Partner not found during disconnect: ${user.partnerId}`);
-                }
+
+            // Force-end any active session (handles both isInCall and edge cases)
+            const result = this.callManager.forceEndSessionByUser(userId);
+            if (result) {
+              const { session, partnerId } = result;
+              console.log(`📞 Ending session ${session.id} for disconnected user ${userId}`);
+
+              // Cancel WebRTC connection timeout if pending
+              this.clearWebRTCTimeout(session.id);
+
+              // Clean up any active games for this session
+              this.gameManager.cleanupSession(session.id);
+
+              const partner = this.userManager.getUser(partnerId);
+              if (partner) {
+                console.log(`📢 Notifying partner ${partner.id} about disconnect`);
+                this.io.to(partner.socketId).emit('call:ended', session.id, 'partner_disconnect');
+                this.userManager.updateUser(partner.id, { isInCall: false, partnerId: undefined });
               } else {
-                console.error(`❌ Session not found for disconnected user: ${userId}`);
+                console.error(`❌ Partner not found during disconnect: ${partnerId}`);
               }
             } else {
               console.log(`⏳ Removing ${userId} from waiting queue (no active call)`);
@@ -1239,11 +1246,12 @@ export class SocketManager {
 
             // Emit user:offline event for call history tracking
             this.io.emit('user:offline', userId);
-            
-            // Remove user
+
+            // Release matching lock and remove user
+            this.userManager.unlockForMatching(userId);
             this.userManager.removeUser(userId);
             this.updateStats();
-            
+
             console.log(`✅ User cleanup completed: ${userId}`);
           } else {
             console.error(`❌ User not found during disconnect: ${userId}`);
@@ -1272,7 +1280,7 @@ export class SocketManager {
 
     // Get pending requests received by this user
     const pendingRequests = this.callbackManager.getPendingRequestsReceived(userId);
-    
+
     if (pendingRequests.length === 0) {
       return; // No pending requests
     }
@@ -1280,7 +1288,7 @@ export class SocketManager {
     // Notify the user about the first pending request (they can accept/decline)
     const request = pendingRequests[0];
     const requester = this.userManager.getUser(request.fromUserId);
-    
+
     if (requester && requester.isConnected && !requester.isInCall) {
       // User is now available - notify them about the callback request
       this.io.to(user.socketId).emit('callback:request:received', {
@@ -1290,7 +1298,7 @@ export class SocketManager {
         originalCallTimestamp: request.originalCallTimestamp,
         originalCallCountry: request.originalCallCountry
       });
-      
+
       // Notify requester that their callback target is now available
       this.io.to(requester.socketId).emit('callback:request:available', {
         requestId: request.id,
@@ -1300,28 +1308,90 @@ export class SocketManager {
   }
 
   /**
+   * Clear a pending WebRTC connection timeout
+   */
+  private clearWebRTCTimeout(sessionId: string): void {
+    const existing = this.webrtcTimeouts.get(sessionId);
+    if (existing) {
+      clearTimeout(existing);
+      this.webrtcTimeouts.delete(sessionId);
+    }
+  }
+
+  /**
+   * Start a WebRTC connection timeout. If neither user confirms P2P within 30s, force-end the call.
+   */
+  private startWebRTCTimeout(sessionId: string): void {
+    this.clearWebRTCTimeout(sessionId);
+
+    const timeout = setTimeout(() => {
+      this.webrtcTimeouts.delete(sessionId);
+
+      const session = this.callManager.getSession(sessionId);
+      if (!session || !session.isActive) return;
+
+      console.log(`⏰ WebRTC connection timeout for session ${sessionId} — forcing call end`);
+
+      // Force end the session
+      this.callManager.endSession(sessionId);
+      this.gameManager.cleanupSession(sessionId);
+
+      // Notify both users
+      const user1 = this.userManager.getUser(session.user1Id);
+      const user2 = this.userManager.getUser(session.user2Id);
+
+      if (user1) {
+        this.io.to(user1.socketId).emit('call:ended', sessionId, 'connection_timeout');
+        this.userManager.updateUser(user1.id, { isInCall: false, partnerId: undefined });
+        this.userManager.unlockForMatching(user1.id);
+      }
+      if (user2) {
+        this.io.to(user2.socketId).emit('call:ended', sessionId, 'connection_timeout');
+        this.userManager.updateUser(user2.id, { isInCall: false, partnerId: undefined });
+        this.userManager.unlockForMatching(user2.id);
+      }
+
+      this.updateStats();
+    }, 30000); // 30 second timeout
+
+    this.webrtcTimeouts.set(sessionId, timeout);
+  }
+
+  /**
    * Attempt to match a user with a partner, using filters first, then falling back to any caller
    */
   private attemptMatch(userId: string, socket: Socket, filters?: UserFilters): void {
     const user = this.userManager.getUser(userId);
     if (!user || user.isInCall) return;
 
+    // Acquire matching lock to prevent double-matching
+    if (!this.userManager.lockForMatching(userId)) {
+      return; // Already being matched by another call
+    }
+
     // Check if we should use fallback (after max attempts)
     const useFallback = this.userManager.shouldUseFallback(userId);
-    
+
     if (useFallback) {
       console.log(`🔄 User ${userId} exceeded filter attempts, using fallback (matching with any caller)`);
     }
 
     // Try to find a partner (with or without filters based on fallback)
     const partner = this.userManager.getRandomPartner(userId, filters, useFallback);
-    
+
     if (partner) {
+      // Lock the partner too to prevent them from being matched elsewhere
+      if (!this.userManager.lockForMatching(partner.id)) {
+        // Partner is already being matched — release our lock and wait
+        this.userManager.unlockForMatching(userId);
+        return;
+      }
+
       console.log(`🎯 Found partner for ${userId}: ${partner.id}${useFallback ? ' (fallback match)' : ''}`);
-      
+
       // Record the match to prevent same users from matching again
       this.userManager.recordMatch(userId, partner.id);
-      
+
       // Remove both users from queue
       this.userManager.removeFromQueue(userId);
       this.userManager.removeFromQueue(partner.id);
@@ -1329,28 +1399,36 @@ export class SocketManager {
       // Create call session
       const session = this.callManager.createSession(userId, partner.id);
       console.log(`📋 Created session: ${session.id} for ${userId} ↔ ${partner.id}`);
-      
+
       // Update user states
       this.userManager.updateUser(userId, { isInCall: true, partnerId: partner.id });
       this.userManager.updateUser(partner.id, { isInCall: true, partnerId: userId });
 
       // Deterministically choose an initiator so only one side creates the offer
       const initiatorId = user.id < partner.id ? user.id : partner.id;
-      
+
       // Log partner info for debugging
       console.log(`📤 Sending call:matched to ${user.id}: partner=${partner.id}, country=${partner.country || 'undefined'}`);
       console.log(`📤 Sending call:matched to ${partner.id}: partner=${user.id}, country=${user.country || 'undefined'}`);
-      
+
       // Notify both users with initiator information
       socket.emit('call:matched', partner, session.id, initiatorId);
       this.io.to(partner.socketId).emit('call:matched', user, session.id, initiatorId);
 
+      // Start WebRTC connection timeout — if P2P doesn't connect within 30s, end the call
+      this.startWebRTCTimeout(session.id);
+
       this.statsManager.incrementTotalSessions();
       this.updateStats();
-      
+
+      // Release locks — users are now in a call, the isInCall flag guards them
+      this.userManager.unlockForMatching(userId);
+      this.userManager.unlockForMatching(partner.id);
+
       console.log(`✅ Call matched successfully: ${user.id} ↔ ${partner.id} (Session: ${session.id})`);
     } else {
       // No partner found, increment attempt count and wait
+      this.userManager.unlockForMatching(userId);
       this.userManager.incrementAttemptCount(userId);
       const info = this.userManager.getWaitingUserInfo(userId);
       const attemptCount = info ? info.attemptCount : 0;
@@ -1360,14 +1438,18 @@ export class SocketManager {
   }
 
   /**
-   * Try to match waiting users when a new user joins or periodically
+   * Try to match waiting users when a new user joins or periodically.
+   * Uses matching locks to prevent double-matching in this cycle.
    */
   private tryMatchWaitingUsers(newUserId?: string): void {
     const waitingUsers = this.userManager.getWaitingUsers(); // Get all waiting users
-    
+
     for (const userId of waitingUsers) {
       const user = this.userManager.getUser(userId);
       if (!user || user.isInCall) continue;
+
+      // Skip if already locked by a concurrent match
+      if (this.userManager.isLockedForMatching(userId)) continue;
 
       const info = this.userManager.getWaitingUserInfo(userId);
       if (!info) continue;
@@ -1375,7 +1457,7 @@ export class SocketManager {
       const socket = this.io.sockets.sockets.get(user.socketId);
       if (!socket) continue;
 
-      // Try to match this waiting user
+      // Try to match this waiting user (attemptMatch handles locking internally)
       this.attemptMatch(userId, socket, info.filters);
     }
   }
@@ -1383,13 +1465,13 @@ export class SocketManager {
   private updateStats(): void {
     const connectedUsers = this.userManager.getConnectedUsers();
     const activeSessions = this.callManager.getActiveSessions();
-    
+
     this.statsManager.updateOnlineUsers(connectedUsers.length);
     this.statsManager.updateActiveCalls(activeSessions.length);
-    
+
     const stats = this.statsManager.getStats();
     this.io.emit('stats:update', stats);
-    
+
     // Log stats occasionally
     if (Math.random() < 0.1) { // 10% chance to log
       console.log(`📊 Stats update: ${stats.onlineUsers} online, ${stats.activeCalls} active calls, ${stats.totalSessions} total sessions`);

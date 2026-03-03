@@ -17,10 +17,10 @@ export function VoiceChatApp() {
   const callInProgressRef = useRef(false)
   const peerSessionRef = useRef<string | null>(null)
   const callStartTimeRef = useRef<Date | null>(null)
-  
+
   // Call history hook
   const callHistory = useCallHistory()
-  
+
   const {
     socket,
     isConnected,
@@ -84,7 +84,7 @@ export function VoiceChatApp() {
       socket.connect()
     }
   }, [socket, isConnected])
-  
+
   // Reset loading state when socket reconnects after disconnect
   useEffect(() => {
     if (isConnected && !partner && !sessionId) {
@@ -98,7 +98,7 @@ export function VoiceChatApp() {
   // Handle WebRTC signaling - simplified with trickle ICE enabled
   const handleWebRTCMessageCallback = useCallback((message: any) => {
     if (isUnmountingRef.current) return
-    
+
     // Only log non-ICE messages to reduce spam
     if (message.type !== 'ice-candidate') {
       console.log('📨 Received WebRTC message:', message.type)
@@ -191,23 +191,23 @@ export function VoiceChatApp() {
   useEffect(() => {
     const uid = user?.id
     const pid = partner?.id
-    
+
     // Skip if already created for this session (check FIRST to avoid log spam)
     if (peerSessionRef.current === sessionId && sessionId) {
       return
     }
-    
+
     // Skip if missing required data
     if (!uid || !pid || !sessionId || !localStream) {
       return
     }
-    
+
     if (isUnmountingRef.current) return
 
     // Determine initiator - prefer server-declared initiator
     const serverInitiatorId: string | undefined = (socket as any)?.__webrtcInitiatorId
     const isInitiator = serverInitiatorId ? uid === serverInitiatorId : uid < pid
-    
+
     console.log('🎯 Creating WebRTC peer:', {
       isInitiator,
       uid,
@@ -215,18 +215,18 @@ export function VoiceChatApp() {
       sessionId,
       localStreamId: localStream.id
     })
-    
+
     // Mark session BEFORE creating peer to prevent race conditions
     peerSessionRef.current = sessionId
-    
+
     const newPeer = createPeer(isInitiator, localStream, (data: any) => {
       if (isUnmountingRef.current) return
-      
+
       // Handle SDP (offer/answer)
       if (data.type === 'offer' || data.type === 'answer') {
         console.log(`📤 Sending ${data.type} to partner`)
         sendWebRTCMessage({ type: data.type, sdp: data, from: uid, to: pid })
-      } 
+      }
       // Handle ICE candidates (with trickle ICE enabled)
       else if (data.candidate) {
         const candidateData = {
@@ -236,21 +236,27 @@ export function VoiceChatApp() {
         }
         sendWebRTCMessage({ type: 'ice-candidate', candidate: candidateData, from: uid, to: pid })
       }
+    }, undefined, () => {
+      // WebRTC P2P connection succeeded — notify server to cancel connection timeout
+      if (socket && sessionId) {
+        console.log('📡 Emitting call:webrtc-connected to server')
+        socket.emit('call:webrtc-connected', { sessionId })
+      }
     })
-    
+
     if (newPeer) {
       console.log('✅ Peer created successfully')
     } else {
       console.error('❌ Peer creation returned null')
       peerSessionRef.current = null  // Reset on failure
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, partner?.id, sessionId, localStream])
 
   // Handle connection state changes and retry logic
   const retryAttemptRef = useRef(0)
   const maxRetries = 3
-  
+
   useEffect(() => {
     if (connectionState !== 'failed') {
       // Reset retry count on successful connection or other states
@@ -259,26 +265,26 @@ export function VoiceChatApp() {
       }
       return
     }
-    
+
     if (!partner || !sessionId || !localStream) return
     if (retryAttemptRef.current >= maxRetries) {
       console.log('❌ Max retry attempts reached')
       return
     }
-    
+
     console.log(`🔄 Connection failed, retry attempt ${retryAttemptRef.current + 1}/${maxRetries}...`)
     retryAttemptRef.current++
-    
+
     const retryTimeout = setTimeout(() => {
       if (isUnmountingRef.current) return
-      
+
       console.log('🔄 Retrying WebRTC connection...')
       peerSessionRef.current = null // Reset session to allow recreation
       cleanupWebRTC()
     }, 3000)
 
     return () => clearTimeout(retryTimeout)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionState])
 
   // Handle call ending - cleanup when partner disconnects
@@ -302,7 +308,7 @@ export function VoiceChatApp() {
   useEffect(() => {
     localAudioLevelRef.current = localAudioLevel
   }, [localAudioLevel])
-  
+
   useEffect(() => {
     if (isUnmountingRef.current) return
 
@@ -317,7 +323,7 @@ export function VoiceChatApp() {
 
   const handleStartCall = useCallback(async (userFilters?: UserFilters) => {
     if (isUnmountingRef.current) return
-    
+
     try {
       setIsLoading(true)
       console.log('🚀 Starting call...')
@@ -335,14 +341,14 @@ export function VoiceChatApp() {
 
   const handleEndCall = useCallback(() => {
     if (isUnmountingRef.current) return
-    
+
     console.log('📞 Ending call...')
-    
+
     // Save call history if we have partner and session
     if (partner && sessionId && callStartTimeRef.current) {
       const endTime = new Date()
       const duration = Math.floor((endTime.getTime() - callStartTimeRef.current.getTime()) / 1000)
-      
+
       if (duration >= 1) {
         callHistory.addCallHistory({
           partnerId: partner.id,
@@ -357,10 +363,10 @@ export function VoiceChatApp() {
           country: partner.country,
         })
       }
-      
+
       callStartTimeRef.current = null
     }
-    
+
     callInProgressRef.current = false
     peerSessionRef.current = null
     endCall()
@@ -378,14 +384,14 @@ export function VoiceChatApp() {
 
   const handleToggleMute = useCallback(() => {
     if (isUnmountingRef.current) return
-    
+
     toggleWebRTCMute()
     toggleMute(!isMuted)
   }, [toggleWebRTCMute, toggleMute, isMuted])
 
   const handleToggleChat = useCallback(() => {
     if (isUnmountingRef.current) return
-    
+
     setShowFilters(!showFilters)
     if (!showFilters && sessionId) {
       requestChatHistory()
@@ -468,11 +474,11 @@ export function VoiceChatApp() {
 
     // Listen for visibility changes
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    
+
     // iOS Safari specific events
     window.addEventListener('freeze', handlePageFreeze)
     window.addEventListener('resume', handlePageResume)
-    
+
     // Network state events
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
@@ -484,7 +490,7 @@ export function VoiceChatApp() {
       window.removeEventListener('resume', handlePageResume)
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
-      
+
       // Release wake lock when call ends
       if (wakeLock) {
         wakeLock.release().then(() => {
@@ -564,9 +570,8 @@ export function VoiceChatApp() {
 
       {/* Connection status indicator */}
       {(!isConnected || isReconnecting) && (
-        <div className={`fixed top-4 right-4 px-4 py-2 rounded-lg shadow-lg z-50 ${
-          isReconnecting ? 'bg-yellow-600' : 'bg-red-600'
-        } text-white`}>
+        <div className={`fixed top-4 right-4 px-4 py-2 rounded-lg shadow-lg z-50 ${isReconnecting ? 'bg-yellow-600' : 'bg-red-600'
+          } text-white`}>
           <div className="flex items-center space-x-2">
             {isReconnecting && (
               <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>

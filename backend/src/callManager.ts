@@ -69,11 +69,11 @@ export class CallManager {
 
   cleanupInactiveSessions(): number {
     const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
     let cleanedCount = 0;
 
     for (const [sessionId, session] of this.sessions.entries()) {
-      if (!session.isActive && session.endTime && session.endTime < oneHourAgo) {
+      if (!session.isActive && session.endTime && session.endTime < fifteenMinutesAgo) {
         this.sessions.delete(sessionId);
         cleanedCount++;
       }
@@ -89,5 +89,21 @@ export class CallManager {
     if (session.user1Id === userId) return session.user2Id;
     if (session.user2Id === userId) return session.user1Id;
     return undefined;
+  }
+
+  /**
+   * Find and force-end any active session for a user.
+   * Returns the ended session and the partner's user ID, or undefined.
+   */
+  forceEndSessionByUser(userId: string): { session: CallSession; partnerId: string } | undefined {
+    const session = this.getSessionByUser(userId);
+    if (!session) return undefined;
+
+    session.isActive = false;
+    session.endTime = new Date();
+    this.sessions.set(session.id, session);
+
+    const partnerId = session.user1Id === userId ? session.user2Id : session.user1Id;
+    return { session, partnerId };
   }
 }

@@ -11,7 +11,7 @@ export default function BlogPage() {
         <Link href="/" className="text-primary-400 hover:text-primary-300 mb-8 inline-block">
           ← Back to Home
         </Link>
-        
+
         <div className="mb-12">
           <h1 className="text-5xl font-bold mb-4">Blog</h1>
           <p className="text-gray-400 text-lg">
@@ -28,7 +28,7 @@ export default function BlogPage() {
             >
               {article.featuredImage && (
                 <div className="w-full h-48 overflow-hidden">
-                  <img loading="lazy" decoding="async" src={article.featuredImage}
+                  <img src={article.featuredImage}
                     alt={article.title}
                     className="w-full h-full object-cover"
                     loading="lazy"

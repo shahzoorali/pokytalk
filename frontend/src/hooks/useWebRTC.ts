@@ -11,7 +11,7 @@ export function useWebRTC() {
   const [localAudioLevel, setLocalAudioLevel] = useState(0)
   const [remoteAudioLevel, setRemoteAudioLevel] = useState(0)
   const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected' | 'failed'>('disconnected')
-  
+
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const dataArrayRef = useRef<Uint8Array | null>(null)
@@ -22,6 +22,9 @@ export function useWebRTC() {
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const retryCountRef = useRef(0)
   const maxRetries = 3
+  const connectionStateRef = useRef<'disconnected' | 'connecting' | 'connected' | 'failed'>('disconnected')
+  // Queue ICE candidates that arrive before the peer is created
+  const pendingCandidatesRef = useRef<any[]>([])
 
   // Keep latest state in refs for proper unmount cleanup without re-running effect
   const peerStateRef = useRef<Peer.Instance | null>(null)
@@ -103,7 +106,7 @@ export function useWebRTC() {
   const initializeAudio = useCallback(async () => {
     try {
       console.log('🎤 Initializing audio...')
-      
+
       // Clean up any existing stream first
       if (localStream) {
         console.log('🧹 Cleaning up existing local stream')
@@ -134,7 +137,7 @@ export function useWebRTC() {
         }
       }
       audioContextRef.current = new AudioContext()
-      
+
       // Resume audio context if suspended (for mobile)
       if (audioContextRef.current.state === 'suspended') {
         audioContextRef.current.resume().then(() => {
@@ -143,7 +146,7 @@ export function useWebRTC() {
           console.error('❌ Error resuming audio context:', err)
         })
       }
-      
+
       const source = audioContextRef.current.createMediaStreamSource(stream)
       analyserRef.current = audioContextRef.current.createAnalyser()
       analyserRef.current.fftSize = 256
@@ -204,7 +207,7 @@ export function useWebRTC() {
     animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
   }, [])
 
-  const createPeer = useCallback((initiator: boolean, stream: MediaStream, onSignal?: (data: any) => void, initialRemoteSignal?: any) => {
+  const createPeer = useCallback((initiator: boolean, stream: MediaStream, onSignal?: (data: any) => void, initialRemoteSignal?: any, onWebRTCConnected?: () => void) => {
 
     console.log(`🔗 Creating WebRTC peer (initiator: ${initiator})`)
     console.log('🎤 Stream info:', {
@@ -212,7 +215,7 @@ export function useWebRTC() {
       tracks: stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, muted: t.muted })),
       active: stream.active
     })
-    
+
     // Clean up existing peer first
     if (peer) {
       console.log('🧹 Cleaning up existing peer')
@@ -231,14 +234,14 @@ export function useWebRTC() {
       { urls: 'stun:stun2.l.google.com:19302' },
       { urls: 'stun:stun3.l.google.com:19302' },
       { urls: 'stun:stun4.l.google.com:19302' },
-      
+
       // Additional STUN servers for better connectivity
       { urls: 'stun:stun.voiparound.com:3478' },
       { urls: 'stun:stun.voipbuster.com:3478' },
       { urls: 'stun:stun.voipstunt.com:3478' },
       { urls: 'stun:stun.voxgratia.org:3478' },
       { urls: 'stun:stun.xten.com:3478' },
-      
+
       // Free TURN servers (for NAT traversal when STUN fails)
       {
         urls: 'turn:openrelay.metered.ca:80',
@@ -274,19 +277,20 @@ export function useWebRTC() {
 
     console.log('✅ Peer created successfully')
     setConnectionState('connecting')
+    connectionStateRef.current = 'connecting'
 
-    // Set connection timeout
+    // Set connection timeout — uses ref so callback reads current value
     if (connectionTimeoutRef.current) {
       clearTimeout(connectionTimeoutRef.current)
     }
     connectionTimeoutRef.current = setTimeout(() => {
-      if (connectionState === 'connecting') {
+      if (connectionStateRef.current === 'connecting') {
         console.log('⏰ Connection timeout, retrying...')
         setConnectionState('failed')
+        connectionStateRef.current = 'failed'
         if (retryCountRef.current < maxRetries) {
           retryCountRef.current++
           console.log(`🔄 Retry attempt ${retryCountRef.current}/${maxRetries}`)
-          // Trigger retry by destroying and recreating peer
           if (newPeer) {
             try {
               newPeer.destroy()
@@ -331,10 +335,15 @@ export function useWebRTC() {
       console.log('🎉 WebRTC peer connected!')
       setIsConnected(true)
       setConnectionState('connected')
+      connectionStateRef.current = 'connected'
       retryCountRef.current = 0 // Reset retry count on successful connection
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current)
         connectionTimeoutRef.current = null
+      }
+      // Notify server that P2P connection succeeded
+      if (onWebRTCConnected) {
+        onWebRTCConnected()
       }
       console.log('✅ WebRTC connected successfully')
     })
@@ -364,6 +373,7 @@ export function useWebRTC() {
       setIsConnected(false)
       setRemoteStream(null)
       setConnectionState('disconnected')
+      connectionStateRef.current = 'disconnected'
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current)
         connectionTimeoutRef.current = null
@@ -374,14 +384,15 @@ export function useWebRTC() {
     newPeer.on('error', (error) => {
       console.error('❌ WebRTC error:', error)
       setConnectionState('failed')
+      connectionStateRef.current = 'failed'
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current)
         connectionTimeoutRef.current = null
       }
-      
+
       // Auto-retry on certain errors
-      if (retryCountRef.current < maxRetries && 
-          (error.message.includes('ICE') || error.message.includes('connection'))) {
+      if (retryCountRef.current < maxRetries &&
+        (error.message.includes('ICE') || error.message.includes('connection'))) {
         retryCountRef.current++
         console.log(`🔄 Auto-retry on error (${retryCountRef.current}/${maxRetries})`)
         setTimeout(() => {
@@ -402,8 +413,26 @@ export function useWebRTC() {
     })
 
     setPeer(newPeer)
+
+    // Flush any ICE candidates that arrived before the peer was created
+    if (pendingCandidatesRef.current.length > 0) {
+      console.log(`📨 Flushing ${pendingCandidatesRef.current.length} queued ICE candidates`)
+      for (const queuedMsg of pendingCandidatesRef.current) {
+        try {
+          if (queuedMsg.type === 'ice-candidate' && queuedMsg.candidate) {
+            newPeer.signal({ type: 'candidate' as const, candidate: queuedMsg.candidate })
+          } else if (queuedMsg.sdp) {
+            newPeer.signal(queuedMsg.sdp)
+          }
+        } catch (err) {
+          console.error('❌ Error flushing queued candidate:', err)
+        }
+      }
+      pendingCandidatesRef.current = []
+    }
+
     return newPeer
-  }, [peer, connectionState])
+  }, [peer])
 
   const handleWebRTCMessage = useCallback((message: WebRTCMessage) => {
     console.log('🔍 handleWebRTCMessage called with:', {
@@ -414,7 +443,9 @@ export function useWebRTC() {
     })
 
     if (!peer) {
-      console.log('⚠️ Skipping WebRTC message - no peer')
+      // Queue the message for later if it's an ICE candidate or signaling data
+      console.log('⏳ Queuing WebRTC message — peer not yet created:', message.type)
+      pendingCandidatesRef.current.push(message)
       return
     }
 
@@ -483,13 +514,13 @@ export function useWebRTC() {
   const cleanup = useCallback(() => {
     console.log('🧹 Starting WebRTC cleanup...')
     isCleaningUpRef.current = true
-    
+
     // Clean up connection timeout
     if (connectionTimeoutRef.current) {
       clearTimeout(connectionTimeoutRef.current)
       connectionTimeoutRef.current = null
     }
-    
+
     // Clean up peer connection
     if (peer && !peer.destroyed) {
       try {
@@ -500,7 +531,7 @@ export function useWebRTC() {
       }
     }
     setPeer(null)
-    
+
     // Clean up local stream
     if (localStream) {
       try {
@@ -513,7 +544,7 @@ export function useWebRTC() {
       }
       setLocalStream(null)
     }
-    
+
     // Clean up remote stream
     if (remoteStream) {
       try {
@@ -526,20 +557,20 @@ export function useWebRTC() {
       }
       setRemoteStream(null)
     }
-    
-         // Clean up audio context
-     if (audioContextRef.current) {
-       try {
-         console.log('🧹 Closing audio context')
-         if (audioContextRef.current.state !== 'closed') {
-           audioContextRef.current.close()
-         }
-       } catch (error) {
-         console.error('❌ Error closing audio context:', error)
-       }
-       audioContextRef.current = null
-     }
-    
+
+    // Clean up audio context
+    if (audioContextRef.current) {
+      try {
+        console.log('🧹 Closing audio context')
+        if (audioContextRef.current.state !== 'closed') {
+          audioContextRef.current.close()
+        }
+      } catch (error) {
+        console.error('❌ Error closing audio context:', error)
+      }
+      audioContextRef.current = null
+    }
+
     // Reset analysers
     analyserRef.current = null
     dataArrayRef.current = null
@@ -552,7 +583,7 @@ export function useWebRTC() {
       cancelAnimationFrame(animationFrameRef.current)
       animationFrameRef.current = null
     }
-    
+
     // Reset state
     setIsConnected(false)
     setIsMuted(false)
@@ -560,10 +591,13 @@ export function useWebRTC() {
     setRemoteAudioLevel(0)
     setConnectionState('disconnected')
     retryCountRef.current = 0
-    
+    connectionStateRef.current = 'disconnected'
+    // Clear any pending queued candidates
+    pendingCandidatesRef.current = []
+
     // Reset cleanup flag
     isCleaningUpRef.current = false
-    
+
     console.log('✅ WebRTC cleanup completed')
   }, [peer, localStream, remoteStream])
 

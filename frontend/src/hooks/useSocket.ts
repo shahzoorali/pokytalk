@@ -8,41 +8,41 @@ const getBackendUrl = (): string => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
-    
+
     // Local development: localhost, 127.0.0.1, or local IP addresses (192.168.x.x, 10.x.x.x, etc.)
-    const isLocalDev = 
-      hostname === 'localhost' || 
-      hostname === '127.0.0.1' || 
+    const isLocalDev =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
       hostname.startsWith('192.168.') ||
       hostname.startsWith('10.') ||
       hostname.startsWith('172.') ||
       hostname === 'SHAHZOORDESKTOP' ||
       hostname.match(/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) // Any IP address
-    
+
     if (isLocalDev) {
       // For local development, always use same hostname with port 3001
       return `${protocol}//${hostname}:3001`
     }
-    
+
     // Production domain mapping: pokytalk.com -> app.pokytalk.com
     if (hostname === 'pokytalk.com' || hostname === 'www.pokytalk.com') {
       return `${protocol}//app.pokytalk.com`
     }
-    
+
     // For app.pokytalk.com, use same domain
     if (hostname === 'app.pokytalk.com') {
       return `${protocol}//app.pokytalk.com`
     }
-    
+
     // If NEXT_PUBLIC_BACKEND_URL is explicitly set and we're not in local dev, use it
     if (process.env.NEXT_PUBLIC_BACKEND_URL) {
       return process.env.NEXT_PUBLIC_BACKEND_URL
     }
-    
+
     // Fallback: use same hostname with port 3001
     return `${protocol}//${hostname}:3001`
   }
-  
+
   // Fallback for SSR
   return 'http://localhost:3001'
 }
@@ -55,12 +55,12 @@ async function detectCountry(): Promise<string | undefined> {
     // Use free IP geolocation API (ipapi.co)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 3000)
-    
-    const response = await fetch('https://ipapi.co/json/', { 
-      signal: controller.signal 
+
+    const response = await fetch('https://ipapi.co/json/', {
+      signal: controller.signal
     })
     clearTimeout(timeoutId)
-    
+
     const data = await response.json()
     if (data?.country_code) {
       console.log(`🌍 Detected country from IP: ${data.country_code}`)
@@ -101,11 +101,11 @@ export function useSocket() {
     originalCallTimestamp?: Date
     originalCallCountry?: string
   } | null>(null)
-  
+
   // Preserve call state during disconnection
   const preservedPartnerRef = useRef<User | null>(null)
   const preservedSessionIdRef = useRef<string | null>(null)
-  
+
   // Callbacks for moderation events (set by components)
   const moderationCallbacksRef = useRef<{
     onReportSuccess?: (message: string) => void
@@ -116,7 +116,7 @@ export function useSocket() {
     onModerationWarning?: (message: string) => void
     onChatError?: (message: string) => void
   }>({})
-  
+
   // Callbacks for callback request events (set by components)
   const callbackCallbacksRef = useRef<{
     onCallbackRequestReceived?: (data: {
@@ -159,7 +159,7 @@ export function useSocket() {
       setIsConnected(true)
       setIsReconnecting(false)
       console.log('✅ Connected to server')
-      
+
       // If we have preserved call state, try to restore it
       if (preservedPartnerRef.current && preservedSessionIdRef.current) {
         console.log('🔄 Restoring call state after reconnection')
@@ -180,7 +180,7 @@ export function useSocket() {
     newSocket.on('disconnect', (reason) => {
       setIsConnected(false)
       console.log('❌ Disconnected from server:', reason)
-      
+
       // Preserve call state if we're in a call
       if (partner && sessionId) {
         console.log('💾 Preserving call state during disconnect')
@@ -193,7 +193,7 @@ export function useSocket() {
         preservedPartnerRef.current = null
         preservedSessionIdRef.current = null
       }
-      
+
       // Don't clear partner/sessionId on disconnect - preserve for reconnection
       // Only clear waiting state
       setIsWaiting(false)
@@ -267,7 +267,7 @@ export function useSocket() {
       console.log('✅ Matched with partner:', partnerData.id, 'Country:', partnerData.country || 'Not set')
     })
 
-    newSocket.on('call:ended', (sessionId: string) => {
+    newSocket.on('call:ended', (sessionId: string, reason?: string) => {
       setPartner(null)
       setSessionId(null)
       setMessages([])
@@ -275,7 +275,7 @@ export function useSocket() {
       preservedPartnerRef.current = null
       preservedSessionIdRef.current = null
       setIsWaiting(false) // Reset waiting state when call ends
-      console.log('Call ended')
+      console.log('Call ended', reason ? `(reason: ${reason})` : '')
     })
 
     newSocket.on('chat:message', (message: ChatMessage) => {
@@ -288,25 +288,6 @@ export function useSocket() {
 
     newSocket.on('stats:update', (statsData: ServerStats) => {
       setStats(statsData)
-    })
-
-    // Online status tracking for call history
-    newSocket.on('user:online', (userId: string) => {
-      console.log('👤 User online:', userId)
-      setOnlineUsers(prev => {
-        const updated = new Set(prev)
-        updated.add(userId)
-        return updated
-      })
-    })
-
-    newSocket.on('user:offline', (userId: string) => {
-      console.log('👤 User offline:', userId)
-      setOnlineUsers(prev => {
-        const updated = new Set(prev)
-        updated.delete(userId)
-        return updated
-      })
     })
 
     newSocket.on('error', (message: string) => {
@@ -559,7 +540,7 @@ export function useSocket() {
   // Callback request functions
   const requestCallback = useCallback((toUserId: string, originalCallTimestamp?: Date, originalCallCountry?: string) => {
     if (socket) {
-      socket.emit('callback:request', { 
+      socket.emit('callback:request', {
         toUserId,
         originalCallTimestamp,
         originalCallCountry
