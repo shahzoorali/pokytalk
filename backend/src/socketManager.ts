@@ -573,6 +573,7 @@ export class SocketManager {
       // Handle callback request
       socket.on('callback:request', (data: CallbackRequestData) => {
         const userId = socket.data.userId;
+        console.log(`📞 callback:request from ${userId} to ${data?.toUserId}`);
 
         if (!userId) {
           socket.emit('callback:request:error', { message: 'Not authenticated' });
@@ -781,26 +782,33 @@ export class SocketManager {
       // Handle callback accept
       socket.on('callback:accept', (requestId: string) => {
         const userId = socket.data.userId;
+        console.log(`📞 callback:accept from ${userId} (socket ${socket.id}) for request ${requestId}`);
 
         if (!userId) {
+          console.log(`❌ callback:accept rejected: not authenticated (socket ${socket.id})`);
           socket.emit('callback:accept:error', { message: 'Not authenticated' });
           return;
         }
 
         const request = this.callbackManager.getRequest(requestId);
         if (!request) {
+          console.log(`❌ callback:accept rejected: request ${requestId} not found/expired`);
           socket.emit('callback:accept:error', { message: 'Request not found or expired' });
           return;
         }
 
+        console.log(`🔎 callback:accept request state: from=${request.fromUserId} to=${request.toUserId} status=${request.status}`);
+
         // Verify this user is the target of the request
         if (request.toUserId !== userId) {
+          console.log(`❌ callback:accept rejected: ${userId} is not target (${request.toUserId})`);
           socket.emit('callback:accept:error', { message: 'Unauthorized' });
           return;
         }
 
         // Verify request is still pending
         if (request.status !== 'pending') {
+          console.log(`❌ callback:accept rejected: status is ${request.status}, not pending`);
           socket.emit('callback:accept:error', { message: 'Request already processed' });
           return;
         }
@@ -808,6 +816,7 @@ export class SocketManager {
         // Re-check block status (users might have blocked each other since request was sent)
         if (this.moderationManager.isBlocked(userId, request.fromUserId) ||
           this.moderationManager.isBlocked(request.fromUserId, userId)) {
+          console.log(`❌ callback:accept rejected: block between ${userId} and ${request.fromUserId}`);
           socket.emit('callback:accept:error', { message: 'Cannot accept callback' });
           return;
         }
@@ -815,21 +824,26 @@ export class SocketManager {
         // Check if requester is still online
         const requester = this.userManager.getUser(request.fromUserId);
         if (!requester || !requester.isConnected) {
+          console.log(`❌ callback:accept rejected: requester ${request.fromUserId} offline (exists=${!!requester}, connected=${requester?.isConnected})`);
           socket.emit('callback:accept:error', { message: 'Requester is no longer online' });
           return;
         }
 
         // Check if either user is in a call
         if (requester.isInCall || userId === requester.partnerId) {
+          console.log(`❌ callback:accept rejected: requester ${request.fromUserId} in call (isInCall=${requester.isInCall}, partnerId=${requester.partnerId})`);
           socket.emit('callback:accept:error', { message: 'Requester is currently in a call' });
           return;
         }
 
         const accepter = this.userManager.getUser(userId);
         if (accepter && accepter.isInCall) {
+          console.log(`❌ callback:accept rejected: accepter ${userId} in call (partnerId=${accepter.partnerId})`);
           socket.emit('callback:accept:error', { message: 'You are currently in a call' });
           return;
         }
+
+        console.log(`✅ callback:accept passed all checks — creating session for ${request.fromUserId} ↔ ${userId}`);
 
         // Accept the request
         const acceptedRequest = this.callbackManager.acceptRequest(requestId);
