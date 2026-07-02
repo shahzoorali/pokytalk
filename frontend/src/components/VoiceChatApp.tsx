@@ -17,6 +17,7 @@ export function VoiceChatApp() {
   const callInProgressRef = useRef(false)
   const peerSessionRef = useRef<string | null>(null)
   const callStartTimeRef = useRef<Date | null>(null)
+  const [retryNonce, setRetryNonce] = useState(0)
 
   // Call history hook
   const callHistory = useCallHistory()
@@ -69,6 +70,7 @@ export function VoiceChatApp() {
     handleWebRTCMessage,
     toggleMute: toggleWebRTCMute,
     cleanup: cleanupWebRTC,
+    resetPeer,
   } = useWebRTC()
 
   // Game state
@@ -251,7 +253,7 @@ export function VoiceChatApp() {
       peerSessionRef.current = null  // Reset on failure
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, partner?.id, sessionId, localStream])
+  }, [user?.id, partner?.id, sessionId, localStream, retryNonce])
 
   // Handle connection state changes and retry logic
   const retryAttemptRef = useRef(0)
@@ -275,12 +277,29 @@ export function VoiceChatApp() {
     console.log(`🔄 Connection failed, retry attempt ${retryAttemptRef.current + 1}/${maxRetries}...`)
     retryAttemptRef.current++
 
-    const retryTimeout = setTimeout(() => {
+    const retryTimeout = setTimeout(async () => {
       if (isUnmountingRef.current) return
 
       console.log('🔄 Retrying WebRTC connection...')
-      peerSessionRef.current = null // Reset session to allow recreation
-      cleanupWebRTC()
+      // Tear down only the peer — keep the local mic stream alive so the
+      // peer-creation effect can immediately rebuild the connection.
+      resetPeer()
+      peerSessionRef.current = null // Allow recreation
+
+      // If the mic stream was lost for any reason, re-acquire it before retrying.
+      if (!localStream) {
+        try {
+          await initializeAudio()
+        } catch (err) {
+          console.error('❌ Failed to re-init audio on retry:', err)
+          return
+        }
+      }
+
+      // Bump the nonce to force the peer-creation effect to run again.
+      if (!isUnmountingRef.current) {
+        setRetryNonce(n => n + 1)
+      }
     }, 3000)
 
     return () => clearTimeout(retryTimeout)

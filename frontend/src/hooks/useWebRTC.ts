@@ -226,39 +226,36 @@ export function useWebRTC() {
       }
     }
 
-    // Enhanced ICE servers configuration
-    const iceServers = [
-      // Google STUN servers
+    // ICE servers configuration.
+    // STUN alone gets ~70-80% of peers connected; the rest (symmetric NAT,
+    // mobile carriers, restrictive firewalls) REQUIRE a working TURN relay.
+    // TURN is configured via env so a live provider can be plugged in without
+    // a code change. Set NEXT_PUBLIC_TURN_URLS (comma-separated) plus
+    // NEXT_PUBLIC_TURN_USERNAME / NEXT_PUBLIC_TURN_CREDENTIAL.
+    // e.g. Cloudflare TURN, metered.ca (paid), Twilio NTS, or self-hosted coturn.
+    const iceServers: RTCIceServer[] = [
+      // Google STUN servers (the only reliably-alive public STUN)
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun3.l.google.com:19302' },
-      { urls: 'stun:stun4.l.google.com:19302' },
-
-      // Additional STUN servers for better connectivity
-      { urls: 'stun:stun.voiparound.com:3478' },
-      { urls: 'stun:stun.voipbuster.com:3478' },
-      { urls: 'stun:stun.voipstunt.com:3478' },
-      { urls: 'stun:stun.voxgratia.org:3478' },
-      { urls: 'stun:stun.xten.com:3478' },
-
-      // Free TURN servers (for NAT traversal when STUN fails)
-      {
-        urls: 'turn:openrelay.metered.ca:80',
-        username: 'openrelayproject',
-        credential: 'openrelayproject'
-      },
-      {
-        urls: 'turn:openrelay.metered.ca:443',
-        username: 'openrelayproject',
-        credential: 'openrelayproject'
-      },
-      {
-        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-        username: 'openrelayproject',
-        credential: 'openrelayproject'
-      }
     ]
+
+    const turnUrls = (process.env.NEXT_PUBLIC_TURN_URLS || '')
+      .split(',')
+      .map(u => u.trim())
+      .filter(Boolean)
+    const turnUsername = process.env.NEXT_PUBLIC_TURN_USERNAME
+    const turnCredential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL
+
+    if (turnUrls.length > 0 && turnUsername && turnCredential) {
+      iceServers.push({
+        urls: turnUrls,
+        username: turnUsername,
+        credential: turnCredential,
+      })
+      console.log(`🔀 TURN configured (${turnUrls.length} url(s))`)
+    } else {
+      console.warn('⚠️ No TURN server configured — calls behind symmetric NAT / mobile networks will fail. Set NEXT_PUBLIC_TURN_URLS.')
+    }
 
     const newPeer = new Peer({
       initiator,
@@ -302,7 +299,7 @@ export function useWebRTC() {
           console.error('❌ Max retries reached, connection failed')
         }
       }
-    }, 15000) // 15 second timeout
+    }, 20000) // 20 second timeout (TURN over TCP on slow networks can exceed 15s)
 
     // Attach signal listener immediately to avoid missing the initial offer
     newPeer.on('signal', (data: any) => {
@@ -511,6 +508,44 @@ export function useWebRTC() {
     }
   }, [peer, localStream, isMuted])
 
+  // Tear down ONLY the peer connection, preserving the local mic stream and
+  // audio context so the call can be retried without re-prompting for the mic.
+  const resetPeer = useCallback(() => {
+    console.log('🔄 Resetting peer (keeping local stream)...')
+
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current)
+      connectionTimeoutRef.current = null
+    }
+
+    if (peer && !peer.destroyed) {
+      try {
+        peer.destroy()
+      } catch (error) {
+        console.error('❌ Error destroying peer during reset:', error)
+      }
+    }
+    setPeer(null)
+
+    // Drop the remote stream/analyser; the local stream is intentionally kept.
+    if (remoteStream) {
+      try {
+        remoteStream.getTracks().forEach(track => track.stop())
+      } catch (error) {
+        console.error('❌ Error stopping remote tracks during reset:', error)
+      }
+      setRemoteStream(null)
+    }
+    remoteAnalyserRef.current = null
+    remoteDataArrayRef.current = null
+
+    pendingCandidatesRef.current = []
+    setIsConnected(false)
+    setRemoteAudioLevel(0)
+    setConnectionState('disconnected')
+    connectionStateRef.current = 'disconnected'
+  }, [peer, remoteStream])
+
   const cleanup = useCallback(() => {
     console.log('🧹 Starting WebRTC cleanup...')
     isCleaningUpRef.current = true
@@ -615,5 +650,6 @@ export function useWebRTC() {
     handleWebRTCMessage,
     toggleMute,
     cleanup,
+    resetPeer,
   }
 }
