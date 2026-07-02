@@ -128,6 +128,15 @@ export default function RootLayout({
             `,
           }}
         />
+        {/* Google AdSense — loaded once site-wide. Enables Auto Ads (no slot IDs
+            needed); manual <ins> units on content pages also use this loader. */}
+        <Script
+          id="adsense-loader"
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8383127866953714"
+          strategy="afterInteractive"
+          crossOrigin="anonymous"
+        />
       </head>
       <body className={inter.className}>
         <div className="min-h-screen bg-gray-900">

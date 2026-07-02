@@ -82,6 +82,50 @@ async function detectCountry(): Promise<string | undefined> {
   return undefined
 }
 
+// Stable per-browser anonymous identity. Lets a returning/refreshing visitor
+// keep the same server-side user id so "Call Back" and online status work.
+const CLIENT_ID_KEY = 'pokytalk_client_id'
+const CALL_HISTORY_KEY = 'pokytalk_call_history'
+
+function genUuid(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
+
+function getClientId(): string | undefined {
+  if (typeof window === 'undefined') return undefined
+  try {
+    let id = localStorage.getItem(CLIENT_ID_KEY)
+    if (!id) {
+      id = genUuid()
+      localStorage.setItem(CLIENT_ID_KEY, id)
+    }
+    return id
+  } catch {
+    return undefined
+  }
+}
+
+function getHistoryPartnerIds(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(CALL_HISTORY_KEY)
+    if (!raw) return []
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr)
+      ? arr.map((e: any) => e?.partnerId).filter((x: any): x is string => typeof x === 'string').slice(0, 50)
+      : []
+  } catch {
+    return []
+  }
+}
+
 export function useSocket() {
   const [socket, setSocket] = useState<Socket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
@@ -172,10 +216,12 @@ export function useSocket() {
           sessionId: preservedSessionIdRef.current || undefined,
         })
       } else {
-        // First connection: detect country and register a fresh user.
+        // First connection (or returning visitor): register/reclaim our
+        // persistent identity so call history + online status stay coherent.
         const country = await detectCountry()
+        const clientId = getClientId()
         console.log('Emitting user:connect event', country ? `with country: ${country}` : 'without country')
-        newSocket.emit('user:connect', country ? { country } : {})
+        newSocket.emit('user:connect', { ...(country ? { country } : {}), ...(clientId ? { clientId } : {}) })
       }
     })
 
@@ -222,6 +268,22 @@ export function useSocket() {
       userIdRef.current = userData.id
       // Add user to online users
       setOnlineUsers(prev => new Set(prev).add(userData.id))
+      // Ask which of our call-history partners are currently online.
+      const historyIds = getHistoryPartnerIds()
+      if (historyIds.length > 0) {
+        newSocket.emit('presence:query', historyIds)
+      }
+    })
+
+    // Presence bootstrap result — seed online status for history partners.
+    newSocket.on('presence:result', (ids: string[]) => {
+      if (!Array.isArray(ids)) return
+      console.log('👥 Presence result:', ids)
+      setOnlineUsers(prev => {
+        const next = new Set(prev)
+        ids.forEach(id => next.add(id))
+        return next
+      })
     })
 
     // Reconnect handshake succeeded — the server restored our user (and call).
@@ -237,6 +299,10 @@ export function useSocket() {
       userIdRef.current = data.user.id
       setOnlineUsers(prev => new Set(prev).add(data.user.id))
       setIsReconnecting(false)
+      const historyIds = getHistoryPartnerIds()
+      if (historyIds.length > 0) {
+        newSocket.emit('presence:query', historyIds)
+      }
 
       if (data.inCall && data.partner && data.sessionId) {
         setPartner(data.partner)
@@ -271,7 +337,8 @@ export function useSocket() {
       setIsWaiting(false)
       setIsReconnecting(false)
       const country = await detectCountry()
-      newSocket.emit('user:connect', country ? { country } : {})
+      const clientId = getClientId()
+      newSocket.emit('user:connect', { ...(country ? { country } : {}), ...(clientId ? { clientId } : {}) })
     })
 
     // Partner temporarily dropped (grace period) — informational.

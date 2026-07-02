@@ -17,6 +17,7 @@ export function VoiceChatApp() {
   const callInProgressRef = useRef(false)
   const peerSessionRef = useRef<string | null>(null)
   const callStartTimeRef = useRef<Date | null>(null)
+  const audioInitInFlightRef = useRef(false)
   const [retryNonce, setRetryNonce] = useState(0)
 
   // Call history hook
@@ -358,6 +359,38 @@ export function VoiceChatApp() {
     }
   }, [initializeAudio, requestCall])
 
+  // Callback flows must acquire the mic on the user's click (same as starting a
+  // normal call) — otherwise the peer-creation effect has no localStream and both
+  // sides hang at "connecting...". These run on a real user gesture, which also
+  // keeps getUserMedia reliable across browsers/iOS.
+  const handleRequestCallback = useCallback(async (toUserId: string, originalCallTimestamp?: Date, originalCallCountry?: string) => {
+    if (isUnmountingRef.current) return
+    try {
+      setIsLoading(true)
+      await initializeAudio()
+      setIsInitialized(true)
+      requestCallback(toUserId, originalCallTimestamp, originalCallCountry)
+    } catch (error) {
+      console.error('Failed to init audio for callback request:', error)
+      alert('Failed to access microphone. Please check permissions.')
+      setIsLoading(false)
+    }
+  }, [initializeAudio, requestCallback])
+
+  const handleAcceptCallback = useCallback(async (requestId: string) => {
+    if (isUnmountingRef.current) return
+    try {
+      setIsLoading(true)
+      await initializeAudio()
+      setIsInitialized(true)
+      acceptCallback(requestId)
+    } catch (error) {
+      console.error('Failed to init audio for callback accept:', error)
+      alert('Failed to access microphone. Please check permissions.')
+      setIsLoading(false)
+    }
+  }, [initializeAudio, acceptCallback])
+
   const handleEndCall = useCallback(() => {
     if (isUnmountingRef.current) return
 
@@ -400,6 +433,29 @@ export function VoiceChatApp() {
       }
     }, 200)
   }, [endCall, cleanupWebRTC, partner, sessionId, callHistory])
+
+  // Safety net: if we're in a session but have no mic stream (e.g. a mutual
+  // callback that matched without an explicit accept gesture, or a mid-call page
+  // reload that restored call state), acquire the mic so the peer can be created.
+  // If the mic can't be obtained, end the call so the partner isn't left hanging.
+  useEffect(() => {
+    if (!partner || !sessionId || localStream || isUnmountingRef.current) return
+    if (audioInitInFlightRef.current) return
+
+    audioInitInFlightRef.current = true
+    ;(async () => {
+      try {
+        console.log('🎤 Safety net: active session with no local stream — initializing audio')
+        await initializeAudio()
+        if (!isUnmountingRef.current) setIsInitialized(true)
+      } catch (error) {
+        console.error('❌ Safety-net audio init failed, ending call:', error)
+        if (!isUnmountingRef.current) handleEndCall()
+      } finally {
+        audioInitInFlightRef.current = false
+      }
+    })()
+  }, [partner?.id, sessionId, localStream, initializeAudio, handleEndCall])
 
   const handleToggleMute = useCallback(() => {
     if (isUnmountingRef.current) return
@@ -578,9 +634,9 @@ export function VoiceChatApp() {
         callHistory={callHistory.history}
         onlineUsers={onlineUsers}
         incomingCallbackRequest={incomingCallbackRequest}
-        onRequestCallback={requestCallback}
+        onRequestCallback={handleRequestCallback}
         onClearHistory={callHistory.clearCallHistory}
-        onAcceptCallback={acceptCallback}
+        onAcceptCallback={handleAcceptCallback}
         onDeclineCallback={declineCallback}
         onBlockedUserRemoved={(blockedUserId) => {
           callHistory.removeBlockedUsers([blockedUserId])

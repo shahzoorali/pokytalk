@@ -36,10 +36,40 @@ export class SocketManager {
       console.log(`🔌 New connection: ${socket.id} from ${socket.handshake.address}`);
 
       // Handle user connection
-      socket.on('user:connect', async (data: { age?: number; country?: string }) => {
+      socket.on('user:connect', async (data: { age?: number; country?: string; clientId?: string }) => {
         console.log(`📝 User connect request from ${socket.id}:`, data);
 
         try {
+          // Identity reclaim: if the client presents a known persistent id, rebind
+          // to the existing record instead of minting a new one. This keeps call
+          // history "online" status accurate and restores any in-progress call.
+          const clientId = this.isValidUuid(data.clientId) ? data.clientId : undefined;
+          if (clientId && this.userManager.getUser(clientId)) {
+            console.log(`♻️ Reclaiming existing identity ${clientId} on socket ${socket.id}`);
+            this.rebindSocket(socket, clientId);
+            const user = this.userManager.getUser(clientId)!;
+            socket.emit('user:connect', user);
+
+            const session = this.callManager.getSessionByUser(clientId);
+            if (session && session.isActive) {
+              const partnerId = this.callManager.getPartnerId(session.id, clientId);
+              const partner = partnerId ? this.userManager.getUser(partnerId) : undefined;
+              const initiatorId = session.user1Id < session.user2Id ? session.user1Id : session.user2Id;
+              socket.emit('user:reconnect:success', {
+                user,
+                inCall: true,
+                partner: partner || null,
+                sessionId: session.id,
+                initiatorId
+              });
+              if (partner) {
+                this.io.to(partner.socketId).emit('call:partner-reconnected', { sessionId: session.id });
+              }
+            }
+            this.updateStats();
+            return;
+          }
+
           // Auto-detect country from IP if not provided
           let detectedCountry = data.country;
           if (!detectedCountry) {
@@ -65,7 +95,7 @@ export class SocketManager {
             }
           }
 
-          const user = this.userManager.createUser(socket.id, data.age, detectedCountry);
+          const user = this.userManager.createUser(socket.id, data.age, detectedCountry, clientId);
           socket.data.userId = user.id;
 
           socket.emit('user:connect', user);
@@ -100,18 +130,9 @@ export class SocketManager {
           return;
         }
 
-        // Cancel any pending grace-period cleanup for this user.
-        const pending = this.disconnectTimeouts.get(userId);
-        if (pending) {
-          clearTimeout(pending);
-          this.disconnectTimeouts.delete(userId);
-          console.log(`✅ Cancelled grace-period cleanup for ${userId}`);
-        }
-
-        // Re-associate the new socket with the existing user record.
-        this.userManager.updateUser(userId, { socketId: socket.id, isConnected: true });
-        socket.data.userId = userId;
-        this.io.emit('user:online', userId);
+        // Re-associate the new socket with the existing user record (cancels the
+        // grace-period cleanup and evicts any stale socket for this identity).
+        this.rebindSocket(socket, userId);
 
         // If the user was in an active call, hand the state back so the client can resume.
         const session = this.callManager.getSessionByUser(userId);
@@ -142,6 +163,24 @@ export class SocketManager {
         }
 
         this.updateStats();
+      });
+
+      // Presence bootstrap: client asks which of its call-history partners are
+      // online right now, so the "Call Back" online dots are accurate after a
+      // fresh page load (online events only fire for changes going forward).
+      socket.on('presence:query', (partnerIds: unknown) => {
+        if (!Array.isArray(partnerIds)) {
+          socket.emit('presence:result', []);
+          return;
+        }
+        const online = partnerIds
+          .filter((id): id is string => typeof id === 'string')
+          .slice(0, 50)
+          .filter(id => {
+            const u = this.userManager.getUser(id);
+            return !!(u && u.isConnected);
+          });
+        socket.emit('presence:result', online);
       });
 
       // Handle call request
@@ -1353,6 +1392,42 @@ export class SocketManager {
         console.error(`❌ Socket error for ${userId} (${socket.id}):`, error);
       });
     });
+  }
+
+  private isValidUuid(s: unknown): s is string {
+    return typeof s === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+  }
+
+  /**
+   * Re-associate an existing user record with a (new) socket. Shared by the
+   * socket-level reconnect (user:reconnect) and identity reclaim (user:connect
+   * with a persisted clientId). Cancels any pending grace-period cleanup and
+   * evicts a stale socket still holding the same identity (e.g. a second tab).
+   */
+  private rebindSocket(socket: Socket, userId: string): void {
+    const user = this.userManager.getUser(userId);
+    if (!user) return;
+
+    const pending = this.disconnectTimeouts.get(userId);
+    if (pending) {
+      clearTimeout(pending);
+      this.disconnectTimeouts.delete(userId);
+      console.log(`✅ Cancelled grace-period cleanup for ${userId}`);
+    }
+
+    // If a different live socket still owns this identity, evict it (new wins).
+    if (user.socketId && user.socketId !== socket.id) {
+      const old = this.io.sockets.sockets.get(user.socketId);
+      if (old) {
+        old.data.userId = undefined; // stop its disconnect handler from tearing us down
+        old.disconnect(true);
+      }
+    }
+
+    this.userManager.updateUser(userId, { socketId: socket.id, isConnected: true });
+    socket.data.userId = userId;
+    this.io.emit('user:online', userId);
   }
 
   /**

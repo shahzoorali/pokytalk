@@ -20,9 +20,12 @@ export class UserManager {
   private readonly MATCH_COOLDOWN_MS = 120_000; // 2 minute cooldown between re-matching same pair
   private readonly MAX_FILTER_ATTEMPTS = 4; // After 4 attempts, fallback to matching without filters
 
-  createUser(socketId: string, age?: number, country?: string): User {
+  createUser(socketId: string, age?: number, country?: string, preferredId?: string): User {
     const user: User = {
-      id: uuidv4(),
+      // Reuse a browser-persistent client id when provided so the same visitor
+      // keeps a stable identity across reconnects/refreshes (call history,
+      // block lists, and callback targeting all key off this id).
+      id: preferredId || uuidv4(),
       socketId,
       age,
       country,
