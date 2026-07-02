@@ -43,13 +43,15 @@ export function CallbackRequestModal({
   if (!isOpen || !requestId) return null
 
   const handleAccept = () => {
+    // Do NOT call onClose() here — it declines the request. The parent dismisses
+    // this modal when the call connects (or on accept error). Closing here
+    // previously raced the async mic init and declined the request before the
+    // accept was sent, so the server rejected the accept as "already declined".
     onAccept(requestId)
-    onClose()
   }
 
   const handleDecline = () => {
     onDecline(requestId)
-    onClose()
   }
 
   return (

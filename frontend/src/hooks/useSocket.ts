@@ -564,6 +564,8 @@ export function useSocket() {
 
     newSocket.on('callback:accept:error', (data: { message: string }) => {
       console.error('❌ Callback accept error:', data)
+      // Dismiss the modal so the user isn't stuck tapping a dead request.
+      setIncomingCallbackRequest(null)
     })
 
     newSocket.on('callback:decline:error', (data: { message: string }) => {
@@ -682,6 +684,8 @@ export function useSocket() {
     if (socket) {
       socket.emit('callback:decline', requestId)
     }
+    // Close the modal immediately on decline (the server reply doesn't target us).
+    setIncomingCallbackRequest(null)
   }, [socket])
 
   const cancelCallback = useCallback((requestId: string) => {
