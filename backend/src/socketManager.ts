@@ -11,6 +11,11 @@ export class SocketManager {
   // Track pending WebRTC connection timeouts: sessionId -> timeout handle
   private webrtcTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
+  // Track grace-period cleanup timers for users who dropped mid-call: userId -> timeout handle.
+  // A brief network blip (mobile handoff, tab backgrounding) should not instantly kill the call.
+  private disconnectTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private readonly RECONNECT_GRACE_MS = 30000; // 30s window to reconnect before the call is torn down
+
   constructor(
     private io: Server,
     private userManager: UserManager,
@@ -73,6 +78,69 @@ export class SocketManager {
         } catch (error) {
           console.error(`❌ Error creating user for ${socket.id}:`, error);
         }
+      });
+
+      // Handle reconnection — restore an existing user (and their live call) after
+      // a socket drop, instead of forcing a brand-new identity.
+      socket.on('user:reconnect', (data: { userId?: string; sessionId?: string }) => {
+        const userId = data?.userId;
+        console.log(`🔄 Reconnect request from ${socket.id}:`, data);
+
+        if (!userId) {
+          socket.emit('user:reconnect:failed', { reason: 'no-user-id' });
+          return;
+        }
+
+        const user = this.userManager.getUser(userId);
+        if (!user) {
+          // Grace period expired, or this user was never known here — client must connect fresh.
+          console.log(`⚠️ Reconnect failed: user ${userId} no longer exists`);
+          socket.emit('user:reconnect:failed', { reason: 'expired' });
+          return;
+        }
+
+        // Cancel any pending grace-period cleanup for this user.
+        const pending = this.disconnectTimeouts.get(userId);
+        if (pending) {
+          clearTimeout(pending);
+          this.disconnectTimeouts.delete(userId);
+          console.log(`✅ Cancelled grace-period cleanup for ${userId}`);
+        }
+
+        // Re-associate the new socket with the existing user record.
+        this.userManager.updateUser(userId, { socketId: socket.id, isConnected: true });
+        socket.data.userId = userId;
+        this.io.emit('user:online', userId);
+
+        // If the user was in an active call, hand the state back so the client can resume.
+        const session = this.callManager.getSessionByUser(userId);
+        if (session && session.isActive) {
+          const partnerId = this.callManager.getPartnerId(session.id, userId);
+          const partner = partnerId ? this.userManager.getUser(partnerId) : undefined;
+          const initiatorId = session.user1Id < session.user2Id ? session.user1Id : session.user2Id;
+
+          console.log(`✅ Reconnected ${userId} into active session ${session.id}`);
+          socket.emit('user:reconnect:success', {
+            user: this.userManager.getUser(userId),
+            inCall: true,
+            partner: partner || null,
+            sessionId: session.id,
+            initiatorId
+          });
+
+          // Let the partner know the peer is back (so it can renegotiate WebRTC if needed).
+          if (partner) {
+            this.io.to(partner.socketId).emit('call:partner-reconnected', { sessionId: session.id });
+          }
+        } else {
+          console.log(`✅ Reconnected ${userId} (no active call)`);
+          socket.emit('user:reconnect:success', {
+            user: this.userManager.getUser(userId),
+            inCall: false
+          });
+        }
+
+        this.updateStats();
       });
 
       // Handle call request
@@ -1214,50 +1282,52 @@ export class SocketManager {
         const userId = socket.data.userId;
         console.log(`🔌 Disconnect: ${socket.id} (${userId}) - Reason: ${reason}`);
 
-        if (userId) {
-          const user = this.userManager.getUser(userId);
-          if (user) {
-            console.log(`👤 Processing disconnect for user: ${userId}`);
-
-            // Force-end any active session (handles both isInCall and edge cases)
-            const result = this.callManager.forceEndSessionByUser(userId);
-            if (result) {
-              const { session, partnerId } = result;
-              console.log(`📞 Ending session ${session.id} for disconnected user ${userId}`);
-
-              // Cancel WebRTC connection timeout if pending
-              this.clearWebRTCTimeout(session.id);
-
-              // Clean up any active games for this session
-              this.gameManager.cleanupSession(session.id);
-
-              const partner = this.userManager.getUser(partnerId);
-              if (partner) {
-                console.log(`📢 Notifying partner ${partner.id} about disconnect`);
-                this.io.to(partner.socketId).emit('call:ended', session.id, 'partner_disconnect');
-                this.userManager.updateUser(partner.id, { isInCall: false, partnerId: undefined });
-              } else {
-                console.error(`❌ Partner not found during disconnect: ${partnerId}`);
-              }
-            } else {
-              console.log(`⏳ Removing ${userId} from waiting queue (no active call)`);
-              this.userManager.removeFromQueue(userId);
-            }
-
-            // Emit user:offline event for call history tracking
-            this.io.emit('user:offline', userId);
-
-            // Release matching lock and remove user
-            this.userManager.unlockForMatching(userId);
-            this.userManager.removeUser(userId);
-            this.updateStats();
-
-            console.log(`✅ User cleanup completed: ${userId}`);
-          } else {
-            console.error(`❌ User not found during disconnect: ${userId}`);
-          }
-        } else {
+        if (!userId) {
           console.log(`⚠️ Socket ${socket.id} disconnected without userId`);
+          return;
+        }
+
+        const user = this.userManager.getUser(userId);
+        if (!user) {
+          console.error(`❌ User not found during disconnect: ${userId}`);
+          return;
+        }
+
+        // Ignore stale disconnects: if this user already reconnected on a newer
+        // socket, socketId won't match — the old socket's disconnect is noise.
+        if (user.socketId !== socket.id) {
+          console.log(`↩️ Ignoring stale disconnect for ${userId} (already on a newer socket)`);
+          return;
+        }
+
+        const activeSession = this.callManager.getSessionByUser(userId);
+        if (activeSession) {
+          // Mid-call drop: give the user a grace window to reconnect before ending the call.
+          console.log(`⏳ ${userId} dropped during call ${activeSession.id} — ${this.RECONNECT_GRACE_MS}ms grace period`);
+          this.userManager.updateUser(userId, { isConnected: false });
+
+          // Optional UI hint for the partner that the peer is temporarily away.
+          const partnerId = this.callManager.getPartnerId(activeSession.id, userId);
+          const partner = partnerId ? this.userManager.getUser(partnerId) : undefined;
+          if (partner) {
+            this.io.to(partner.socketId).emit('call:partner-reconnecting', { sessionId: activeSession.id });
+          }
+
+          const timer = setTimeout(() => {
+            this.disconnectTimeouts.delete(userId);
+            const current = this.userManager.getUser(userId);
+            // Only finalize if they never came back.
+            if (current && !current.isConnected) {
+              console.log(`⌛ Grace period expired for ${userId} — finalizing disconnect`);
+              this.finalizeDisconnect(userId);
+            }
+          }, this.RECONNECT_GRACE_MS);
+
+          this.disconnectTimeouts.set(userId, timer);
+          this.updateStats();
+        } else {
+          // Not in a call — clean up immediately.
+          this.finalizeDisconnect(userId);
         }
       });
 
@@ -1267,6 +1337,53 @@ export class SocketManager {
         console.error(`❌ Socket error for ${userId} (${socket.id}):`, error);
       });
     });
+  }
+
+  /**
+   * Fully tear down a user: end their active call (notifying the partner),
+   * remove them from the queue, mark them offline, and delete the record.
+   * Used both for immediate (idle) disconnects and expired grace periods.
+   */
+  private finalizeDisconnect(userId: string): void {
+    const user = this.userManager.getUser(userId);
+    if (!user) return;
+
+    console.log(`👤 Finalizing disconnect for user: ${userId}`);
+
+    const result = this.callManager.forceEndSessionByUser(userId);
+    if (result) {
+      const { session, partnerId } = result;
+      console.log(`📞 Ending session ${session.id} for disconnected user ${userId}`);
+
+      this.clearWebRTCTimeout(session.id);
+      this.gameManager.cleanupSession(session.id);
+
+      const partner = this.userManager.getUser(partnerId);
+      if (partner) {
+        console.log(`📢 Notifying partner ${partner.id} about disconnect`);
+        this.io.to(partner.socketId).emit('call:ended', session.id, 'partner_disconnect');
+        this.userManager.updateUser(partner.id, { isInCall: false, partnerId: undefined });
+      } else {
+        console.error(`❌ Partner not found during disconnect: ${partnerId}`);
+      }
+    } else {
+      console.log(`⏳ Removing ${userId} from waiting queue (no active call)`);
+      this.userManager.removeFromQueue(userId);
+    }
+
+    // Clear any lingering grace timer.
+    const pending = this.disconnectTimeouts.get(userId);
+    if (pending) {
+      clearTimeout(pending);
+      this.disconnectTimeouts.delete(userId);
+    }
+
+    this.io.emit('user:offline', userId);
+    this.userManager.unlockForMatching(userId);
+    this.userManager.removeUser(userId);
+    this.updateStats();
+
+    console.log(`✅ User cleanup completed: ${userId}`);
   }
 
   /**

@@ -105,6 +105,8 @@ export function useSocket() {
   // Preserve call state during disconnection
   const preservedPartnerRef = useRef<User | null>(null)
   const preservedSessionIdRef = useRef<string | null>(null)
+  // Track our own userId across reconnects so we can resume identity (not create a new user)
+  const userIdRef = useRef<string | null>(null)
 
   // Callbacks for moderation events (set by components)
   const moderationCallbacksRef = useRef<{
@@ -160,17 +162,17 @@ export function useSocket() {
       setIsReconnecting(false)
       console.log('✅ Connected to server')
 
-      // If we have preserved call state, try to restore it
-      if (preservedPartnerRef.current && preservedSessionIdRef.current) {
-        console.log('🔄 Restoring call state after reconnection')
-        setPartner(preservedPartnerRef.current)
-        setSessionId(preservedSessionIdRef.current)
-        // Re-request chat history if needed
-        if (preservedSessionIdRef.current) {
-          newSocket.emit('chat:history', preservedSessionIdRef.current)
-        }
+      // If we already have an identity, this is a reconnect — ask the server to
+      // resume our existing user (and live call) rather than minting a new one.
+      // The server replies with user:reconnect:success or :failed.
+      if (userIdRef.current) {
+        console.log('🔄 Reconnecting — resuming identity', userIdRef.current)
+        newSocket.emit('user:reconnect', {
+          userId: userIdRef.current,
+          sessionId: preservedSessionIdRef.current || undefined,
+        })
       } else {
-        // Only detect country and connect user if not in a call
+        // First connection: detect country and register a fresh user.
         const country = await detectCountry()
         console.log('Emitting user:connect event', country ? `with country: ${country}` : 'without country')
         newSocket.emit('user:connect', country ? { country } : {})
@@ -181,21 +183,16 @@ export function useSocket() {
       setIsConnected(false)
       console.log('❌ Disconnected from server:', reason)
 
-      // Preserve call state if we're in a call
-      if (partner && sessionId) {
-        console.log('💾 Preserving call state during disconnect')
-        preservedPartnerRef.current = partner
-        preservedSessionIdRef.current = sessionId
+      // Note: this handler closes over the initial render's state, so `partner`
+      // and `sessionId` here are stale — we rely on the preserved refs (kept
+      // current by the match/reconnect handlers) to know if a call is live.
+      if (preservedSessionIdRef.current) {
+        console.log('💾 Call in progress — showing reconnecting state, will resume on reconnect')
         setIsReconnecting(true)
-      } else {
-        // Only clear state if not in a call
-        setUser(null)
-        preservedPartnerRef.current = null
-        preservedSessionIdRef.current = null
       }
 
-      // Don't clear partner/sessionId on disconnect - preserve for reconnection
-      // Only clear waiting state
+      // Keep partner/sessionId and userId so the reconnect handshake can resume.
+      // Only clear the transient waiting state.
       setIsWaiting(false)
     })
 
@@ -222,8 +219,68 @@ export function useSocket() {
     newSocket.on('user:connect', (userData: User) => {
       console.log('Received user:connect response:', userData)
       setUser(userData)
+      userIdRef.current = userData.id
       // Add user to online users
       setOnlineUsers(prev => new Set(prev).add(userData.id))
+    })
+
+    // Reconnect handshake succeeded — the server restored our user (and call).
+    newSocket.on('user:reconnect:success', (data: {
+      user: User
+      inCall: boolean
+      partner?: User | null
+      sessionId?: string
+      initiatorId?: string
+    }) => {
+      console.log('✅ Reconnect success:', data)
+      setUser(data.user)
+      userIdRef.current = data.user.id
+      setOnlineUsers(prev => new Set(prev).add(data.user.id))
+      setIsReconnecting(false)
+
+      if (data.inCall && data.partner && data.sessionId) {
+        setPartner(data.partner)
+        setSessionId(data.sessionId)
+        preservedPartnerRef.current = data.partner
+        preservedSessionIdRef.current = data.sessionId
+        setIsWaiting(false)
+        if (data.initiatorId) {
+          // @ts-expect-error augment runtime value
+          newSocket.__webrtcInitiatorId = data.initiatorId
+        }
+        // Refresh chat history for the resumed session.
+        newSocket.emit('chat:history', data.sessionId)
+      } else {
+        // No live call on the server — clear any stale call state.
+        setPartner(null)
+        setSessionId(null)
+        preservedPartnerRef.current = null
+        preservedSessionIdRef.current = null
+      }
+    })
+
+    // Reconnect handshake failed (grace period expired / unknown user) — start fresh.
+    newSocket.on('user:reconnect:failed', async (data: { reason?: string }) => {
+      console.log('⚠️ Reconnect failed:', data?.reason, '— registering as a new user')
+      setPartner(null)
+      setSessionId(null)
+      setMessages([])
+      preservedPartnerRef.current = null
+      preservedSessionIdRef.current = null
+      userIdRef.current = null
+      setIsWaiting(false)
+      setIsReconnecting(false)
+      const country = await detectCountry()
+      newSocket.emit('user:connect', country ? { country } : {})
+    })
+
+    // Partner temporarily dropped (grace period) — informational.
+    newSocket.on('call:partner-reconnecting', (data: { sessionId: string }) => {
+      console.log('📴 Partner is reconnecting for session', data.sessionId)
+    })
+
+    newSocket.on('call:partner-reconnected', (data: { sessionId: string }) => {
+      console.log('📶 Partner reconnected for session', data.sessionId)
     })
 
     // Track online/offline status for call history
