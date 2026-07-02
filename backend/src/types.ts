@@ -27,6 +27,9 @@ export interface CallSession {
   endTime?: Date;
   messages: ChatMessage[];
   isActive: boolean;
+  // True once a client confirms the WebRTC P2P connection actually established.
+  // Used for funnel analytics (match -> real conversation).
+  webrtcConnected?: boolean;
 }
 
 export interface UserFilters {

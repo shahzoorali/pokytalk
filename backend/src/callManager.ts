@@ -82,6 +82,14 @@ export class CallManager {
     return cleanedCount;
   }
 
+  markWebRTCConnected(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.webrtcConnected = true;
+      this.sessions.set(sessionId, session);
+    }
+  }
+
   getPartnerId(sessionId: string, userId: string): string | undefined {
     const session = this.sessions.get(sessionId);
     if (!session) return undefined;

@@ -70,6 +70,7 @@ export class SocketManager {
 
           socket.emit('user:connect', user);
           this.updateStats();
+          this.logFunnel('connect', { userId: user.id, country: user.country || null });
 
           // Emit user:online event for call history tracking
           this.io.emit('user:online', user.id);
@@ -163,6 +164,10 @@ export class SocketManager {
         this.userManager.addToQueue(userId, filters);
         this.userManager.updateUser(userId, { isInCall: false, partnerId: undefined });
         console.log(`⏳ User ${userId} added to waiting queue`);
+        this.logFunnel('call_request', {
+          userId,
+          hasFilters: !!(filters && (filters.minAge || filters.maxAge || (filters.countries && filters.countries.length))),
+        });
 
         // Try to find a partner (with filters first)
         this.attemptMatch(userId, socket, filters);
@@ -193,6 +198,7 @@ export class SocketManager {
         if (result) {
           const { session, partnerId } = result;
           console.log(`📋 Ending session: ${session.id}`);
+          this.logCallEnd(session, 'hangup');
 
           // Cancel the WebRTC connection timeout if pending
           this.clearWebRTCTimeout(session.id);
@@ -303,6 +309,13 @@ export class SocketManager {
 
         // Clear the connection timeout — the call is successfully connected
         this.clearWebRTCTimeout(data.sessionId);
+
+        // Record first P2P confirmation for this session (funnel: match -> real conversation).
+        const session = this.callManager.getSession(data.sessionId);
+        if (session && !session.webrtcConnected) {
+          this.callManager.markWebRTCConnected(data.sessionId);
+          this.logFunnel('webrtc_connected', { sessionId: data.sessionId, userId });
+        }
       });
 
       // Handle chat messages
@@ -616,6 +629,7 @@ export class SocketManager {
             this.io.to(user2.socketId).emit('call:matched', user1, session.id, initiatorId);
 
             // Record match in stats
+            this.logFunnel('match', { sessionId: session.id, userId, partnerId: toUserId, via: 'callback' });
             this.statsManager.incrementTotalSessions();
           }
 
@@ -671,6 +685,7 @@ export class SocketManager {
             this.io.to(user2.socketId).emit('call:matched', user1, session.id, initiatorId);
 
             // Record match in stats
+            this.logFunnel('match', { sessionId: session.id, userId, partnerId: toUserId, via: 'callback' });
             this.statsManager.incrementTotalSessions();
           }
 
@@ -822,6 +837,7 @@ export class SocketManager {
           this.io.to(accepter.socketId).emit('call:matched', requester, session.id, initiatorId);
 
           // Record match in stats
+          this.logFunnel('match', { sessionId: session.id, userId: request.fromUserId, partnerId: userId, via: 'callback' });
           this.statsManager.incrementTotalSessions();
         }
       });
@@ -1354,6 +1370,7 @@ export class SocketManager {
     if (result) {
       const { session, partnerId } = result;
       console.log(`📞 Ending session ${session.id} for disconnected user ${userId}`);
+      this.logCallEnd(session, 'disconnect');
 
       this.clearWebRTCTimeout(session.id);
       this.gameManager.cleanupSession(session.id);
@@ -1448,6 +1465,7 @@ export class SocketManager {
       if (!session || !session.isActive) return;
 
       console.log(`⏰ WebRTC connection timeout for session ${sessionId} — forcing call end`);
+      this.logCallEnd(session, 'connection_timeout');
 
       // Force end the session
       this.callManager.endSession(sessionId);
@@ -1535,6 +1553,7 @@ export class SocketManager {
       // Start WebRTC connection timeout — if P2P doesn't connect within 30s, end the call
       this.startWebRTCTimeout(session.id);
 
+      this.logFunnel('match', { sessionId: session.id, userId, partnerId: partner.id, via: useFallback ? 'fallback' : 'filtered' });
       this.statsManager.incrementTotalSessions();
       this.updateStats();
 
@@ -1577,6 +1596,30 @@ export class SocketManager {
       // Try to match this waiting user (attemptMatch handles locking internally)
       this.attemptMatch(userId, socket, info.filters);
     }
+  }
+
+  /**
+   * Emit a single-line structured funnel event to stdout.
+   * App Runner ships stdout to CloudWatch; query with Logs Insights, e.g.:
+   *   fields @timestamp, evt, sessionId, durationSec, webrtcConnected, reason
+   *   | filter @message like /"funnel"/
+   *   | stats count(*) by evt
+   */
+  private logFunnel(evt: string, data: Record<string, unknown> = {}): void {
+    console.log(JSON.stringify({ log: 'funnel', evt, ts: new Date().toISOString(), ...data }));
+  }
+
+  /**
+   * Log the end of a call once, with duration and whether P2P ever connected.
+   */
+  private logCallEnd(session: { id: string; startTime: Date; webrtcConnected?: boolean }, reason: string): void {
+    const durationSec = Math.max(0, Math.round((Date.now() - new Date(session.startTime).getTime()) / 1000));
+    this.logFunnel('call_end', {
+      sessionId: session.id,
+      reason,
+      durationSec,
+      webrtcConnected: !!session.webrtcConnected,
+    });
   }
 
   private updateStats(): void {
