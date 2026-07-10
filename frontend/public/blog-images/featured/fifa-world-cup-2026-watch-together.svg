@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="FIFA World Cup 2026 watch party and fan chat on Pokytalk">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="0.5" stop-color="#14532d"/>
+      <stop offset="1" stop-color="#052e16"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#4ade80"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22c55e" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#22c55e" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="930" cy="300" r="360" fill="url(#glow)"/>
+
+  <!-- pitch lines -->
+  <g stroke="#4ade80" stroke-opacity="0.18" stroke-width="2" fill="none">
+    <line x1="0" y1="520" x2="1200" y2="520"/>
+    <line x1="0" y1="560" x2="1200" y2="560"/>
+    <circle cx="600" cy="700" r="150"/>
+  </g>
+
+  <!-- soccer ball -->
+  <g transform="translate(930 300)">
+    <circle r="150" fill="#f8fafc"/>
+    <circle r="150" fill="none" stroke="#0f172a" stroke-width="3"/>
+    <g fill="#0f172a">
+      <polygon points="0,-55 52,-17 32,45 -32,45 -52,-17"/>
+      <polygon points="0,-150 46,-118 30,-92 -30,-92 -46,-118"/>
+      <polygon points="150,-30 120,10 92,-30 108,-70 148,-64" transform="rotate(0)"/>
+    </g>
+    <g fill="none" stroke="#0f172a" stroke-width="3">
+      <line x1="0" y1="-55" x2="0" y2="-92"/>
+      <line x1="52" y1="-17" x2="92" y2="-30"/>
+      <line x1="32" y1="45" x2="70" y2="90"/>
+      <line x1="-32" y1="45" x2="-70" y2="90"/>
+      <line x1="-52" y1="-17" x2="-92" y2="-30"/>
+    </g>
+  </g>
+
+  <!-- text -->
+  <g font-family="Inter, Arial, sans-serif">
+    <text x="90" y="150" fill="#4ade80" font-size="30" font-weight="700" letter-spacing="4">POKYTALK</text>
+    <text x="88" y="270" fill="#ffffff" font-size="90" font-weight="800">FIFA World Cup</text>
+    <text x="88" y="378" fill="url(#accent)" font-size="128" font-weight="800">2026</text>
+    <text x="92" y="450" fill="#cbd5e1" font-size="34" font-weight="500">Watch together. Talk football. Make fan friends.</text>
+    <g transform="translate(92 495)">
+      <rect width="290" height="58" rx="29" fill="url(#accent)"/>
+      <text x="145" y="38" fill="#052e16" font-size="26" font-weight="700" text-anchor="middle">Join the conversation</text>
+    </g>
+  </g>
+</svg>

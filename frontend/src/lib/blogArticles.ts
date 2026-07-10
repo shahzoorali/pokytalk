@@ -9,6 +9,14 @@ export interface BlogArticle {
 
 export const articles: BlogArticle[] = [
   {
+    slug: 'fifa-world-cup-2026-watch-together-chat',
+    title: 'FIFA World Cup 2026: Where to Talk Football, Watch Together & Make Fan Friends Online',
+    excerpt: 'The first 48-team World Cup is here, co-hosted by the USA, Canada and Mexico. Discover how to turn every match into a global watch party — meet football fans worldwide, react live, and make friends over the beautiful game on Pokytalk.',
+    date: 'July 10, 2026',
+    author: 'Pokytalk Team',
+    featuredImage: '/blog-images/featured/fifa-world-cup-2026-watch-together.svg'
+  },
+  {
     slug: 'why-talking-to-strangers-is-good-for-soul',
     title: 'Why Talking to Strangers is Good for Your Soul',
     excerpt: 'In an increasingly isolated world, stepping outside your social bubble to connect with someone new can be a powerful act of self-care. Discover the surprising emotional benefits of spontaneous conversations.',
