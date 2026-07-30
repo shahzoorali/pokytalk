@@ -65,6 +65,15 @@ const isAmplifyDomain = (origin: string | undefined): boolean => {
          /^https?:\/\/.*\.awsapprunner\.com$/.test(origin);
 };
 
+const isLocalhost = (origin: string | undefined): boolean => {
+  if (!origin) return false;
+  return /^https?:\/\/localhost(:\d+)?$/.test(origin) || 
+         /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
+         /^https?:\/\/192\.168\.\d+\.\d+(:\d+)?$/.test(origin) ||
+         /^https?:\/\/10\.\d+\.\d+\.\d+(:\d+)?$/.test(origin) ||
+         /^https?:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+(:\d+)?$/.test(origin);
+};
+
 const isCustomDomain = (origin: string | undefined): boolean => {
   if (!origin) return false;
   // Allow custom domains: pokytalk.com, www.pokytalk.com, and app.pokytalk.com
@@ -81,11 +90,12 @@ const getCorsOrigin = () => {
       callback(null, true);
       return;
     }
-    // Allow if it matches frontend URL, Amplify/AppRunner domain, or custom domain
+    // Allow if it matches frontend URL, Amplify/AppRunner domain, custom domain, or localhost
     const allowed = 
       (frontendUrl && origin === frontendUrl) ||
       isAmplifyDomain(origin) ||
-      isCustomDomain(origin);
+      isCustomDomain(origin) || 
+      isLocalhost(origin);
     
     console.log(`🔍 CORS check for origin: ${origin} - ${allowed ? 'ALLOWED' : 'BLOCKED'}`);
     callback(null, allowed);
