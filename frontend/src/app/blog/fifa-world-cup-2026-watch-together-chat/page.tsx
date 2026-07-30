@@ -1,32 +1,18 @@
-'use client'
-
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AdSense } from '@/components/AdSense'
+import { Breadcrumbs } from '@/components/Breadcrumbs'
+import { JsonLd } from '@/components/JsonLd'
+import { articleBreadcrumb, articleMetadata, blogPostingJsonLd, getArticle } from '@/lib/seo'
+
+const SLUG = 'fifa-world-cup-2026-watch-together-chat'
+
+export const metadata: Metadata = articleMetadata(SLUG)
 
 export default function FifaWorldCup2026WatchTogetherArticle() {
-  const articleSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'BlogPosting',
-    headline:
-      'FIFA World Cup 2026: Where to Talk Football, Watch Together & Make Fan Friends Online',
-    description:
-      'A fan-first guide to the 2026 FIFA World Cup across the USA, Canada and Mexico. Find people to talk football with, join virtual watch parties, and make friends who love the game on Pokytalk.',
-    image: 'https://pokytalk.com/blog-images/featured/fifa-world-cup-2026-watch-together.svg',
-    author: { '@type': 'Organization', name: 'Pokytalk Team' },
-    publisher: {
-      '@type': 'Organization',
-      name: 'Pokytalk',
-      logo: { '@type': 'ImageObject', url: 'https://pokytalk.com/icon.svg' },
-    },
-    datePublished: '2026-07-10',
-    dateModified: '2026-07-10',
-    mainEntityOfPage: {
-      '@type': 'WebPage',
-      '@id':
-        'https://pokytalk.com/blog/fifa-world-cup-2026-watch-together-chat/',
-    },
-  }
-
+  // The BlogPosting schema that used to be inlined here now comes from
+  // lib/seo.ts, so it stays consistent with the other articles and points the
+  // publisher logo at a raster image (Google rejects SVG logos).
   const faqSchema = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
@@ -68,19 +54,18 @@ export default function FifaWorldCup2026WatchTogetherArticle() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
-      />
+      <JsonLd data={blogPostingJsonLd(SLUG)} />
+      <JsonLd data={articleBreadcrumb(SLUG)} />
+      <JsonLd data={faqSchema} />
 
       <div className="max-w-4xl mx-auto">
-        <Link href="/blog" className="text-primary-400 hover:text-primary-300 mb-8 inline-block">
-          ← Back to Blog
-        </Link>
+        <Breadcrumbs
+          trail={[
+            { name: 'Home', href: '/' },
+            { name: 'Blog', href: '/blog' },
+            { name: getArticle(SLUG).title },
+          ]}
+        />
 
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">

@@ -15,6 +15,7 @@ export const articles: BlogArticle[] = [
   {
     slug: 'fifa-world-cup-2026-watch-together-chat',
     title: 'FIFA World Cup 2026: Where to Talk Football, Watch Together & Make Fan Friends Online',
+    seoTitle: 'FIFA World Cup 2026: Talk Football Online',
     excerpt: 'The first 48-team World Cup is here, co-hosted by the USA, Canada and Mexico. Discover how to turn every match into a global watch party — meet football fans worldwide, react live, and make friends over the beautiful game on Pokytalk.',
     date: 'July 10, 2026',
     author: 'Pokytalk Team',
