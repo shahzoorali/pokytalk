@@ -125,6 +125,8 @@ export function ConnectionScreen({
   const [messageInput, setMessageInput] = useState('')
   const [isGameOpen, setIsGameOpen] = useState(false)
   const [isHistorySidebarOpen, setIsHistorySidebarOpen] = useState(false)
+  const [callDuration, setCallDuration] = useState(0)
+  
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const remoteAudioRef = useRef<HTMLAudioElement>(null)
   
@@ -157,6 +159,27 @@ export function ConnectionScreen({
       setIsEndingCall(false)
     }
   }, [isInCall])
+
+  // Call timer effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isInCall) {
+      interval = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+    } else {
+      setCallDuration(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isInCall]);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
   // Set up moderation callbacks
   useEffect(() => {
@@ -402,342 +425,256 @@ export function ConnectionScreen({
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-6xl space-y-6">
-          {/* Community Guidelines - Only show when not initialized (first time, before any call) */}
-          {!isInitialized && (
-            <div className="bg-gray-800/80 backdrop-blur-sm border border-gray-700/50 rounded-xl p-4 sm:p-6 shadow-xl">
-              <h2 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4 flex items-center space-x-2">
-                <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary-400" />
-                <span>Community Guidelines</span>
-              </h2>
-              <div className="space-y-2 sm:space-y-3 text-xs sm:text-sm text-gray-300">
-              <div className="flex items-start space-x-2">
-                <span className="text-primary-400 font-bold">18+</span>
-                <p>You must be 18 or older to use this service. We're serious about this.</p>
+      <div className="flex-1 flex flex-col items-center w-full relative sm:py-6">
+        <div className="w-full h-full max-w-md flex flex-col justify-between sm:rounded-[3rem] sm:border-[8px] sm:border-gray-800 sm:bg-black overflow-hidden relative shadow-2xl">
+          
+          {(!isInitialized || (!isInCall && !isWaiting && !loading)) && (
+            // Dialer UI - Initial State
+            <div className="flex-1 flex flex-col w-full h-full bg-black">
+              {/* Display Area */}
+              <div className="flex-1 flex flex-col items-center justify-center pb-8 min-h-[120px]">
+                <div className="w-full text-center px-4">
+                  <h1 className="text-4xl text-white font-light tracking-wide truncate">
+                    Pokytalk
+                  </h1>
+                  <p className="text-sm text-gray-400 mt-2 font-medium">Tap to call a random stranger</p>
+                </div>
               </div>
-              <div className="flex items-start space-x-2">
-                <span className="text-red-400 font-bold">⚠️</span>
-                <p><strong>Stay anonymous.</strong> Never share your real name, location, phone, email, or social media. Protect your privacy.</p>
+
+              {/* Call Action */}
+              <div className="flex justify-center items-center w-full max-w-[280px] mx-auto mb-10 px-2">
+                <button
+                  onClick={() => {
+                    if (!isWaiting && !loading && isConnected) handleStartCall()
+                  }}
+                  disabled={loading || !isConnected || isWaiting}
+                  className="w-20 h-20 rounded-full bg-[#34C759] hover:bg-[#2ecc71] active:bg-[#27ae60] flex items-center justify-center transition-all transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(52,199,89,0.3)] disabled:opacity-50"
+                  title="Start Random Call"
+                >
+                  <Phone className="w-9 h-9 text-white fill-current" />
+                </button>
               </div>
-              <div className="flex items-start space-x-2">
-                <span className="text-primary-400 font-bold">🤝</span>
-                <p><strong>Be respectful.</strong> Treat others how you want to be treated. No harassment, hate speech, or bullying.</p>
-              </div>
-              <div className="flex items-start space-x-2">
-                <span className="text-primary-400 font-bold">🚫</span>
-                <p><strong>No illegal content.</strong> Don't share anything illegal, violent, or that promotes harm.</p>
-              </div>
-              <div className="flex items-start space-x-2">
-                <span className="text-primary-400 font-bold">📢</span>
-                <p><strong>Report bad behavior.</strong> If someone makes you uncomfortable or violates these rules, report them immediately.</p>
-              </div>
-              <div className="pt-2 border-t border-gray-700/50">
-                <p className="text-xs text-gray-400">
-                  By using Pokytalk, you agree to our <a href="/terms" className="text-primary-400 hover:text-primary-300 underline">Terms</a> and <a href="/privacy" className="text-primary-400 hover:text-primary-300 underline">Privacy Policy</a>. Violations may result in permanent ban.
-                </p>
+
+              {/* Minimal Community Note */}
+              <div className="text-center pb-4 text-xs text-gray-600">
+                18+ Only. Be respectful. <a href="/terms" className="underline hover:text-gray-400">Terms</a>
               </div>
             </div>
-          </div>
           )}
 
-          {/* Single Call Button - Changes state based on call status */}
-          <div className="flex flex-col items-center space-y-4">
-            {/* Call Button Container */}
-            <div className="relative">
-              {/* Pulse animation background when in call */}
-              {isInCall && (
-                <div className="absolute inset-0 rounded-full bg-primary-500/20 animate-ping"></div>
-              )}
-              
-              {/* Main Call Button */}
-              <button
-                onClick={() => {
-                  if (isInCall) {
-                    // Hang up: end the call
-                    if (onEndCall) {
-                      onEndCall()
-                    }
-                  } else {
-                    // Start call: same function as homepage Call button
-                    if (!isWaiting && !loading && isConnected) {
-                      handleStartCall()
-                    }
-                  }
-                }}
-                disabled={isInCall ? false : (loading || !isConnected || isWaiting)}
-                className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 ${
-                  isInCall
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : isWaiting || loading
-                    ? 'bg-gray-600 cursor-wait'
-                    : 'bg-primary-600 hover:bg-primary-700'
-                } disabled:opacity-50 disabled:cursor-not-allowed shadow-lg`}
-              >
-                {/* Loading Spinner - show when waiting or loading (before call starts) */}
-                {!isInCall && (isWaiting || loading) && (
-                  <div className="animate-spin rounded-full h-8 w-8 border-4 border-white border-t-transparent"></div>
-                )}
-                
-                {/* Call Icon - when idle (not in call, not waiting, not loading) */}
-                {!isInCall && !isWaiting && !loading && (
-                  <Phone className="w-10 h-10 text-white" />
-                )}
-                
-                {/* Hang Up Icon - when in call */}
-                {isInCall && (
-                  <X className="w-10 h-10 text-white" />
-                )}
-              </button>
+          {(isWaiting || loading) && !isInCall && (
+            // Calling UI
+            <div className="flex-1 flex flex-col items-center justify-between py-12 bg-black w-full h-full">
+              <div className="text-center space-y-2 mt-8">
+                <h2 className="text-3xl font-light text-white">Calling...</h2>
+                <p className="text-gray-400">Finding a random stranger</p>
+              </div>
+
+              <div className="relative my-8">
+                <div className="absolute inset-0 rounded-full bg-[#34C759] opacity-20 animate-ping"></div>
+                <div className="w-32 h-32 bg-gray-800 rounded-full flex items-center justify-center relative z-10 border border-gray-700">
+                  <Users className="w-12 h-12 text-[#34C759] animate-pulse" />
+                </div>
+              </div>
+
+              <div className="mb-10">
+                 <button
+                    onClick={() => {
+                      if (onEndCall) onEndCall()
+                      setIsLoading(false)
+                    }}
+                    className="w-20 h-20 rounded-full bg-[#FF3B30] hover:bg-red-500 active:bg-red-600 flex items-center justify-center transition-all transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,59,48,0.3)]"
+                  >
+                    <Phone className="w-9 h-9 text-white fill-current rotate-[135deg]" />
+                  </button>
+              </div>
             </div>
+          )}
 
-            {/* Button Label */}
-            <span className="text-white text-sm font-medium">
-              {isInCall ? 'Hang up' : isWaiting || loading ? 'Connecting...' : 'Call'}
-            </span>
-
-            {/* Call Info - Show when initialized (audio ready) - keeps layout after hang up */}
-            {isInitialized && (
-              <div className={`w-full bg-gray-800 rounded-lg p-4 ${showChat && isInCall ? 'lg:flex lg:items-stretch lg:space-x-4 lg:space-y-0' : 'space-y-4'}`}>
-                {/* Left Column - Controls and Audio Levels */}
-                <div className={`space-y-4 ${showChat && isInCall ? 'lg:w-[350px] lg:flex-shrink-0' : 'w-full'}`}>
-                  {/* Connection Status - only show when in call */}
-                  {isInCall && (
-                    <div className="flex items-center justify-center space-x-2">
-                      <div className={`w-2 h-2 ${
-                        isReconnecting ? 'bg-yellow-500' :
-                        connectionState === 'connected' ? 'bg-green-500' :
-                        connectionState === 'connecting' ? 'bg-yellow-500' :
-                        connectionState === 'failed' ? 'bg-red-500' : 'bg-gray-500'
-                      } rounded-full animate-pulse`}></div>
-                      <span className="text-white text-xs">
-                        {isReconnecting ? 'Reconnecting...' :
-                         connectionState === 'connected' ? 'Connected' :
-                         connectionState === 'connecting' ? 'Connecting...' :
-                         connectionState === 'failed' ? 'Connection Failed' : 'Disconnected'}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Audio Levels */}
-                  <div className="space-y-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-400">You</span>
-                        {isMuted && <MicOff className="w-3 h-3 text-red-500" />}
-                      </div>
-                      <AudioLevelBar level={isMuted ? 0 : localAudioLevel} />
-                    </div>
-                    {/* Partner audio level - only show when in call */}
-                    {isInCall && (
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-400">Partner</span>
-                        </div>
-                        <AudioLevelBar level={remoteAudioLevel} />
-                      </div>
-                    )}
+          {isInCall && partner && (
+            // In Call UI
+            <div className="flex-1 flex flex-col w-full h-full bg-black relative">
+              {/* Call Info Status */}
+              <div className="flex flex-col items-center pt-10 space-y-3">
+                <div className="flex flex-col items-center">
+                  <h2 className="text-3xl font-light text-white mb-2">{getCountryName(partner.country)}</h2>
+                  <div className="flex space-x-2 items-center">
+                    <span className="text-gray-400 font-mono text-sm">{formatTime(callDuration)}</span>
+                    {partner.country && <Flag countryCode={partner.country} size={16} />}
                   </div>
+                </div>
+              </div>
 
-                  {/* Additional Controls */}
-                  <div className="flex items-center justify-center space-x-3">
-                    <button
-                      onClick={onToggleMute}
-                      className={`p-2 rounded-full transition-colors ${
-                        isMuted
-                          ? 'bg-red-600 hover:bg-red-700 text-white'
-                          : 'bg-gray-700 hover:bg-gray-600 text-white'
-                      }`}
-                      title={isMuted ? 'Unmute' : 'Mute'}
-                    >
-                      {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                    </button>
-
-                    <button
-                      onClick={onToggleChat}
-                      className={`p-2 rounded-full transition-colors relative ${
-                        showChat
-                          ? 'bg-primary-600 hover:bg-primary-700 text-white'
-                          : 'bg-gray-700 hover:bg-gray-600 text-white'
-                      }`}
-                      title="Toggle Chat"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      {messages.length > 0 && !showChat && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-xs text-white">
-                          {messages.length > 9 ? '9+' : messages.length}
-                        </span>
-                      )}
-                    </button>
-
-                    {/* History Button */}
-                    {callHistory && callHistory.length > 0 && (
-                      <button
-                        onClick={() => setIsHistorySidebarOpen(true)}
-                        className="p-2 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors relative"
-                        title="Call History"
-                      >
-                        <History className="w-4 h-4" />
-                        {callHistory.length > 0 && (
-                          <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center text-xs text-white">
-                            {callHistory.length > 9 ? '9+' : callHistory.length}
-                          </span>
-                        )}
-                      </button>
-                    )}
-
-                    {/* Game Button */}
-                    {gameHook && (
-                      <button
-                        onClick={() => setIsGameOpen(true)}
-                        className={`p-2 rounded-full transition-colors relative ${
-                          gameHook.isPlaying || gameHook.gameStatus === 'invite_received'
-                            ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                            : 'bg-gray-700 hover:bg-gray-600 text-white'
-                        }`}
-                        title="Play Games"
-                      >
-                        <Gamepad2 className="w-4 h-4" />
-                        {/* Notification dot for invite */}
-                        {gameHook.gameStatus === 'invite_received' && (
-                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
-                        )}
-                      </button>
-                    )}
+              {/* Visualizer / Avatar Area */}
+              <div className="flex-1 flex items-center justify-center min-h-[160px]">
+                <div className="relative">
+                  <div className="absolute inset-0 rounded-full bg-[#34C759] opacity-20 animate-pulse"></div>
+                  <div className="w-32 h-32 rounded-full flex items-center justify-center border-2 border-[#34C759]/30 bg-gray-800 relative z-10">
+                    <Users className="w-12 h-12 text-white opacity-80" />
                   </div>
+                </div>
+              </div>
+              
+              {/* Audio Bars */}
+              <div className="w-full max-w-[200px] mx-auto space-y-4 mb-4">
+                <div className="flex justify-between items-center opacity-70">
+                  <Mic className="w-4 h-4 text-gray-500" />
+                  <div className="flex-1 mx-4"><AudioLevelBar level={isMuted ? 0 : localAudioLevel} /></div>
+                </div>
+                <div className="flex justify-between items-center opacity-70">
+                  <Phone className="w-4 h-4 text-gray-500" />
+                  <div className="flex-1 mx-4"><AudioLevelBar level={remoteAudioLevel} /></div>
+                </div>
+              </div>
 
-                  {/* Safety Section - Only show when in call */}
-                  {isInCall && partner && (
-                    <div className="mt-4 pt-4 border-t border-gray-700">
-                      <div className="flex items-center justify-center space-x-3">
-                        <button
-                          onClick={() => setShowReportModal(true)}
-                          className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium"
-                          title="Report this user"
-                        >
-                          <FlagIcon className="w-4 h-4" />
-                          <span>Report</span>
-                        </button>
-                        <button
-                          onClick={() => setShowBlockDialog(true)}
-                          className="flex items-center space-x-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm font-medium"
-                          title="Block this user"
-                        >
-                          <ShieldOff className="w-4 h-4" />
-                          <span>Block</span>
-                        </button>
-                      </div>
-                      <p className="text-xs text-gray-500 text-center mt-2">
-                        Report or block users who violate our community guidelines
-                      </p>
-                    </div>
-                  )}
+              {/* Call Controls Grid */}
+              <div className="grid grid-cols-3 gap-y-6 gap-x-4 max-w-[280px] mx-auto mt-auto mb-10 w-full px-6">
+                {/* Mute Button */}
+                <div className="flex flex-col items-center group">
+                  <button 
+                    onClick={onToggleMute}
+                    className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
+                      isMuted ? 'bg-white text-gray-900' : 'bg-gray-800 text-white hover:bg-gray-700 active:bg-gray-600'
+                    }`}
+                  >
+                    {isMuted ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
+                  </button>
+                  <span className="text-xs text-gray-400 mt-2">Mute</span>
                 </div>
 
-                {/* Chat Panel - WhatsApp-like design - only show when in call */}
-                {showChat && isInCall && (
-                  <div className={`border-t border-gray-700 mt-4 lg:border-t-0 lg:mt-0 lg:border-l lg:border-gray-700 lg:pl-4 flex flex-col flex-1 lg:w-[450px] lg:flex-shrink-0`} style={{ minHeight: '500px', maxHeight: 'calc(100vh - 200px)' }}>
-                    {/* Chat Header */}
-                    <div className="px-4 py-3 bg-gray-800/50 border-b border-gray-700 flex items-center justify-between rounded-t-lg">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
-                          <MessageSquare className="w-4 h-4 text-white" />
+                {/* Chat Button */}
+                <div className="flex flex-col items-center group relative">
+                  <button 
+                    onClick={onToggleChat}
+                    className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
+                      showChat ? 'bg-white text-gray-900' : 'bg-gray-800 text-white hover:bg-gray-700 active:bg-gray-600'
+                    }`}
+                  >
+                    <MessageSquare className="w-7 h-7" />
+                    {messages.length > 0 && !showChat && (
+                      <span className="absolute top-0 right-0 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-xs text-white font-bold border-2 border-black">
+                        {messages.length}
+                      </span>
+                    )}
+                  </button>
+                  <span className="text-xs text-gray-400 mt-2">Chat</span>
+                </div>
+
+                {/* Safety / Report Button */}
+                <div className="flex flex-col items-center group">
+                  <button 
+                    onClick={() => setShowReportModal(true)}
+                    className="w-16 h-16 rounded-full flex items-center justify-center transition-all bg-gray-800 text-white hover:bg-gray-700 active:bg-gray-600"
+                  >
+                    <ShieldOff className="w-6 h-6 text-red-500" />
+                  </button>
+                  <span className="text-xs text-gray-400 mt-2">Safety</span>
+                </div>
+              </div>
+
+              {/* End Call Button */}
+              <div className="flex justify-center pb-10">
+                <button
+                  onClick={() => {
+                    if (onEndCall) onEndCall()
+                  }}
+                  className="w-20 h-20 rounded-full bg-[#FF3B30] hover:bg-red-500 active:bg-red-600 flex items-center justify-center transition-all transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,59,48,0.3)]"
+                >
+                  <Phone className="w-9 h-9 text-white fill-current rotate-[135deg]" />
+                </button>
+              </div>
+
+              {/* Native-like Chat Overlay */}
+              {showChat && (
+                <div className="absolute inset-x-0 bottom-0 top-16 bg-[#1C1C1E] z-30 flex flex-col rounded-t-3xl overflow-hidden shadow-[0_-10px_40px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-5">
+                  <div className="px-5 py-4 bg-[#1C1C1E] flex items-center justify-between border-b border-gray-800">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center">
+                        <MessageSquare className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-white text-base font-semibold">Messages</h3>
+                      </div>
+                    </div>
+                    <button
+                      onClick={onToggleChat}
+                      className="w-8 h-8 bg-gray-800 hover:bg-gray-700 rounded-full flex items-center justify-center transition-colors"
+                    >
+                      <X className="w-5 h-5 text-gray-400" />
+                    </button>
+                  </div>
+
+                  {/* Messages Area */}
+                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 custom-scrollbar bg-black pb-4">
+                    {messages.length === 0 ? (
+                      <div className="flex items-center justify-center h-full">
+                        <span className="text-gray-500 text-sm">No messages yet</span>
+                      </div>
+                    ) : (
+                      messages.map((message, index) => (
+                        <div
+                          key={index}
+                          className={`flex ${message.senderId === partner?.id ? 'justify-start' : 'justify-end'}`}
+                        >
+                          <div
+                            className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-[15px] shadow-sm leading-snug ${
+                              message.senderId === partner?.id
+                                ? 'bg-[#2C2C2E] text-white rounded-tl-sm'
+                                : 'bg-[#0B84FF] text-white rounded-tr-sm'
+                            }`}
+                          >
+                            <p className="break-words whitespace-pre-wrap">{message.content}</p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="text-white text-sm font-semibold">Chat</h3>
-                          {partner && (
-                            <p className="text-gray-400 text-xs">{getCountryName(partner.country)}</p>
-                          )}
-                        </div>
+                      ))
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+
+                  {/* Input Area */}
+                  <div className="px-4 py-3 bg-[#1C1C1E] border-t border-gray-800 pb-safe">
+                    <div className="flex items-end space-x-3">
+                      <div className="flex-1 bg-black rounded-full px-4 py-2.5 border border-gray-800 focus-within:border-gray-600 overflow-hidden flex items-center">
+                        <textarea
+                          value={messageInput}
+                          onChange={(e) => {
+                            setMessageInput(e.target.value)
+                            e.target.style.height = 'auto'
+                            e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`
+                          }}
+                          onKeyPress={handleKeyPress}
+                          placeholder="Text Message"
+                          className="w-full bg-transparent text-white placeholder-gray-500 text-[15px] resize-none focus:outline-none max-h-[100px] flex items-center pt-0.5"
+                          rows={1}
+                          maxLength={3000}
+                          style={{ minHeight: '22px' }}
+                        />
                       </div>
                       <button
-                        onClick={onToggleChat}
-                        className="text-gray-400 hover:text-white transition-colors p-1 lg:hidden"
-                        title="Close chat"
+                        onClick={handleSendMessage}
+                        disabled={!messageInput.trim()}
+                        className="bg-[#0B84FF] disabled:bg-[#0B84FF]/40 text-white w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors self-end mb-0.5"
                       >
-                        <X className="w-5 h-5" />
+                        <Send className="w-4 h-4 ml-0.5" />
                       </button>
                     </div>
-
-                    {/* Messages Area - WhatsApp-like bubbles */}
-                    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 custom-scrollbar bg-gray-900/30">
-                      {messages.length === 0 ? (
-                        <div className="flex items-center justify-center h-full">
-                          <p className="text-gray-500 text-sm">No messages yet. Start the conversation!</p>
-                        </div>
-                      ) : (
-                        messages.map((message, index) => (
-                          <div
-                            key={index}
-                            className={`flex ${message.senderId === partner?.id ? 'justify-start' : 'justify-end'}`}
-                          >
-                            <div
-                              className={`max-w-[75%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl shadow-sm ${
-                                message.senderId === partner?.id
-                                  ? 'bg-gray-700 text-white rounded-tl-sm'
-                                  : 'bg-primary-600 text-white rounded-tr-sm'
-                              }`}
-                            >
-                              <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">
-                                {message.content}
-                              </p>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                      <div ref={messagesEndRef} />
-                    </div>
-
-                    {/* Input Area - WhatsApp-like */}
-                    <div className="px-4 py-3 bg-gray-800/50 border-t border-gray-700 rounded-b-lg">
-                      <div className="flex items-end space-x-2">
-                        <div className="flex-1 bg-gray-700 rounded-2xl px-4 py-2.5 focus-within:ring-2 focus-within:ring-primary-500 transition-all">
-                          <textarea
-                            value={messageInput}
-                            onChange={(e) => {
-                              setMessageInput(e.target.value)
-                              // Auto-resize textarea
-                              e.target.style.height = 'auto'
-                              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`
-                            }}
-                            onKeyPress={handleKeyPress}
-                            placeholder="Type a message..."
-                            className="w-full bg-transparent text-white placeholder-gray-400 text-sm resize-none focus:outline-none max-h-[120px]"
-                            rows={1}
-                            maxLength={3000}
-                            style={{ minHeight: '24px' }}
-                          />
-                        </div>
-                        <button
-                          onClick={handleSendMessage}
-                          disabled={!messageInput.trim()}
-                          className="bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:opacity-50 text-white p-3 rounded-full transition-all transform hover:scale-105 active:scale-95 disabled:transform-none flex-shrink-0 shadow-lg"
-                          title="Send message"
-                        >
-                          <Send className="w-5 h-5" />
-                        </button>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2 text-center">
-                        {messageInput.length}/3000 characters
-                      </p>
-                    </div>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Homepage Info Section and Blog Widget - Only show when not initialized */}
-          {!isInitialized && (
-            <>
-              <HomepageInfoSection />
-              <BlogWidget />
-            </>
+                </div>
+              )}
+            </div>
           )}
-
-          {/* Hidden audio element for remote stream */}
-          {isInCall && <audio ref={remoteAudioRef} autoPlay playsInline />}
         </div>
+
+        {/* Homepage Info Section and Blog Widget - Hidden for dialer aesthetic, but kept in dom for SEO / accessibility */}
+        {!isInitialized && (
+          <div className="w-full max-w-md mx-auto hidden sm:block mt-8">
+            <HomepageInfoSection />
+            <BlogWidget />
+          </div>
+        )}
+
+        {/* Hidden audio element for remote stream */}
+        {isInCall && <audio ref={remoteAudioRef} autoPlay playsInline />}
       </div>
 
       {/* Filters Modal */}
@@ -857,24 +794,24 @@ export function ConnectionScreen({
       {/* Hangman Game Modal */}
       {gameHook && (
         <HangmanGame
-          gameStatus={gameHook.gameStatus}
-          game={gameHook.game}
-          role={gameHook.role}
-          pendingInvite={gameHook.pendingInvite}
-          gameResult={gameHook.gameResult}
-          error={gameHook.error}
-          inviteToGame={gameHook.inviteToGame}
-          acceptInvite={gameHook.acceptInvite}
-          declineInvite={gameHook.declineInvite}
-          setWord={gameHook.setWord}
-          guessLetter={gameHook.guessLetter}
-          guessWord={gameHook.guessWord}
-          endGame={gameHook.endGame}
-          requestRematch={gameHook.requestRematch}
-          acceptRematch={gameHook.acceptRematch}
-          resetGame={gameHook.resetGame}
-          clearError={gameHook.clearError}
-          isOpen={isGameOpen || gameHook.gameStatus === 'invite_received'}
+          gameStatus={gameHook!.gameStatus}
+          game={gameHook!.game}
+          role={gameHook!.role}
+          pendingInvite={gameHook!.pendingInvite}
+          gameResult={gameHook!.gameResult}
+          error={gameHook!.error}
+          inviteToGame={gameHook!.inviteToGame}
+          acceptInvite={gameHook!.acceptInvite}
+          declineInvite={gameHook!.declineInvite}
+          setWord={gameHook!.setWord}
+          guessLetter={gameHook!.guessLetter}
+          guessWord={gameHook!.guessWord}
+          endGame={gameHook!.endGame}
+          requestRematch={gameHook!.requestRematch}
+          acceptRematch={gameHook!.acceptRematch}
+          resetGame={gameHook!.resetGame}
+          clearError={gameHook!.clearError}
+          isOpen={isGameOpen || gameHook!.gameStatus === 'invite_received'}
           onClose={() => setIsGameOpen(false)}
         />
       )}
@@ -952,11 +889,11 @@ export function ConnectionScreen({
       {incomingCallbackRequest && (
         <CallbackRequestModal
           isOpen={!!incomingCallbackRequest}
-          requestId={incomingCallbackRequest.requestId}
-          fromUserId={incomingCallbackRequest.fromUserId}
-          fromCountry={incomingCallbackRequest.fromCountry}
-          originalCallTimestamp={incomingCallbackRequest.originalCallTimestamp}
-          originalCallCountry={incomingCallbackRequest.originalCallCountry}
+          requestId={incomingCallbackRequest!.requestId}
+          fromUserId={incomingCallbackRequest!.fromUserId}
+          fromCountry={incomingCallbackRequest!.fromCountry}
+          originalCallTimestamp={incomingCallbackRequest!.originalCallTimestamp}
+          originalCallCountry={incomingCallbackRequest!.originalCallCountry}
           onAccept={(requestId) => {
             if (onAcceptCallback) {
               onAcceptCallback(requestId)
