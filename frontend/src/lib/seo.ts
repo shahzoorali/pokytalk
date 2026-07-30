@@ -61,11 +61,20 @@ export function isoDate(displayDate: string): string {
  * blogArticles.ts. Each article page needs only:
  *   export const metadata = articleMetadata('my-slug')
  */
+/** Social crawlers (Facebook, X, LinkedIn) do not render SVG og:images, so an
+ *  SVG featured image must not be advertised as the share card. */
+function isRasterImage(path: string): boolean {
+  return /\.(jpe?g|png|webp|gif)$/i.test(path)
+}
+
 export function articleMetadata(slug: string): Metadata {
   const article = getArticle(slug)
   const url = canonicalPath(`/blog/${slug}`)
   const description = clampDescription(article.excerpt)
-  const image = article.featuredImage ?? DEFAULT_OG_IMAGE
+  const image =
+    article.featuredImage && isRasterImage(article.featuredImage)
+      ? article.featuredImage
+      : DEFAULT_OG_IMAGE
 
   return {
     title: pageTitle(article.seoTitle ?? article.title),
@@ -139,7 +148,13 @@ export function blogPostingJsonLd(slug: string) {
     '@type': 'BlogPosting',
     headline: article.title,
     description: clampDescription(article.excerpt),
-    image: `${SITE_URL}${article.featuredImage ?? DEFAULT_OG_IMAGE}`,
+    // Raster only: Google Images does not support SVG, so an SVG featured
+    // image would make the BlogPosting's image property unusable.
+    image: `${SITE_URL}${
+      article.featuredImage && isRasterImage(article.featuredImage)
+        ? article.featuredImage
+        : DEFAULT_OG_IMAGE
+    }`,
     datePublished: published,
     dateModified: published,
     author: { '@type': 'Organization', name: article.author, url: SITE_URL },

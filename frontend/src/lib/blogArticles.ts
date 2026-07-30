@@ -13,6 +13,15 @@ export interface BlogArticle {
 
 export const articles: BlogArticle[] = [
   {
+    slug: 'ai-companions-vs-real-people',
+    title: 'AI Companions vs Real People: Why Human Voice Still Matters',
+    seoTitle: 'AI Companions vs Real Human Conversation',
+    excerpt: 'AI companions never reject you, never get bored and are always awake at 3am. That is exactly the problem. Why being valued only means something when the other person could have walked away — and how to rebuild the habit of real conversation.',
+    date: 'July 30, 2026',
+    author: 'Pokytalk Team',
+    featuredImage: '/blog-images/featured/ai-companions-vs-real-people.png'
+  },
+  {
     slug: 'fifa-world-cup-2026-watch-together-chat',
     title: 'FIFA World Cup 2026: Where to Talk Football, Watch Together & Make Fan Friends Online',
     seoTitle: 'FIFA World Cup 2026: Talk Football Online',
