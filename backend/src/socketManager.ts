@@ -1431,10 +1431,17 @@ export class SocketManager {
     }
 
     // If a different live socket still owns this identity, evict it (new wins).
+    // Only one tab/socket can hold a given identity at a time — the same
+    // clientId is shared across every tab of the same browser via
+    // localStorage, so opening Pokytalk in a second tab reaches here.
     if (user.socketId && user.socketId !== socket.id) {
       const old = this.io.sockets.sockets.get(user.socketId);
       if (old) {
         old.data.userId = undefined; // stop its disconnect handler from tearing us down
+        // Tell the losing tab why, before the disconnect event fires with the
+        // generic 'io server disconnect' reason. Without this, that tab shows
+        // an indefinite "Connecting to server..." spinner with no explanation.
+        old.emit('identity:replaced');
         old.disconnect(true);
       }
     }

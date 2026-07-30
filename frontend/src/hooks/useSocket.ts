@@ -130,6 +130,10 @@ export function useSocket() {
   const [socket, setSocket] = useState<Socket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [isReconnecting, setIsReconnecting] = useState(false)
+  // True once the server confirms another tab took over this identity. The
+  // socket will not auto-reconnect after this (see the disconnect handler
+  // below), so this is a terminal state for the current tab, not a blip.
+  const [isReplacedByOtherTab, setIsReplacedByOtherTab] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [stats, setStats] = useState<ServerStats | null>(null)
   const [isWaiting, setIsWaiting] = useState(false)
@@ -204,6 +208,7 @@ export function useSocket() {
     newSocket.on('connect', async () => {
       setIsConnected(true)
       setIsReconnecting(false)
+      setIsReplacedByOtherTab(false)
       console.log('✅ Connected to server')
 
       // If we already have an identity, this is a reconnect — ask the server to
@@ -229,6 +234,19 @@ export function useSocket() {
       setIsConnected(false)
       console.log('❌ Disconnected from server:', reason)
 
+      // 'io server disconnect' only happens when the server explicitly called
+      // socket.disconnect() — the only place that does this is rebindSocket()
+      // evicting a stale socket because this identity's clientId (shared via
+      // localStorage across every tab) reconnected from another tab. Per
+      // socket.io-client, this reason does NOT auto-reconnect, so this tab is
+      // done: show a clear message instead of an indefinite reconnect spinner.
+      if (reason === 'io server disconnect') {
+        setIsReplacedByOtherTab(true)
+        setIsReconnecting(false)
+        setIsWaiting(false)
+        return
+      }
+
       // Note: this handler closes over the initial render's state, so `partner`
       // and `sessionId` here are stale — we rely on the preserved refs (kept
       // current by the match/reconnect handlers) to know if a call is live.
@@ -240,6 +258,12 @@ export function useSocket() {
       // Keep partner/sessionId and userId so the reconnect handshake can resume.
       // Only clear the transient waiting state.
       setIsWaiting(false)
+    })
+
+    // Sent just before the server-initiated disconnect above; mainly useful
+    // for confirming the reason from server logs / future diagnostics.
+    newSocket.on('identity:replaced', () => {
+      console.log('🔁 This identity was reclaimed by another tab')
     })
 
     newSocket.on('reconnect_attempt', (attemptNumber) => {
@@ -705,6 +729,7 @@ export function useSocket() {
     socket,
     isConnected,
     isReconnecting,
+    isReplacedByOtherTab,
     user,
     stats,
     isWaiting,

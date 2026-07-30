@@ -27,6 +27,7 @@ export function VoiceChatApp() {
     socket,
     isConnected,
     isReconnecting,
+    isReplacedByOtherTab,
     user,
     stats,
     isWaiting,
@@ -81,12 +82,18 @@ export function VoiceChatApp() {
     userId: user?.id || null,
   })
 
-  // Initialize socket connection
+  // Initialize socket connection.
+  // Skipped once this tab has been replaced by another tab with the same
+  // identity (localStorage clientId is shared per-origin, not per-tab): the
+  // server deliberately disconnected us and reconnecting here would just
+  // evict the other tab right back, producing an endless ping-pong between
+  // the two tabs. Only a fresh page load (see the "Use This Tab Instead"
+  // button) should reclaim the identity after that.
   useEffect(() => {
-    if (socket && !isConnected) {
+    if (socket && !isConnected && !isReplacedByOtherTab) {
       socket.connect()
     }
-  }, [socket, isConnected])
+  }, [socket, isConnected, isReplacedByOtherTab])
 
   // Reset loading state when socket reconnects after disconnect
   useEffect(() => {
@@ -498,8 +505,9 @@ export function VoiceChatApp() {
         // Don't disconnect - connections will be maintained
       } else {
         console.log('📱 Page visible (screen unlocked/foregrounded)')
-        // Reconnect socket if disconnected
-        if (socket && !isConnected) {
+        // Reconnect socket if disconnected (but not if another tab took over
+        // this identity — see the comment on the socket-init effect above)
+        if (socket && !isConnected && !isReplacedByOtherTab) {
           console.log('🔄 Reconnecting socket after visibility change')
           socket.connect()
         }
@@ -527,7 +535,7 @@ export function VoiceChatApp() {
     // Handle page resume (iOS Safari)
     const handlePageResume = () => {
       console.log('▶️ Page resumed - reconnecting if needed')
-      if (socket && !isConnected) {
+      if (socket && !isConnected && !isReplacedByOtherTab) {
         socket.connect()
       }
     }
@@ -535,7 +543,7 @@ export function VoiceChatApp() {
     // Handle online/offline events
     const handleOnline = () => {
       console.log('🌐 Network online - reconnecting if needed')
-      if (socket && !isConnected) {
+      if (socket && !isConnected && !isReplacedByOtherTab) {
         socket.connect()
       }
     }
@@ -575,7 +583,7 @@ export function VoiceChatApp() {
         })
       }
     }
-  }, [partner, sessionId, socket, isConnected, localStream])
+  }, [partner, sessionId, socket, isConnected, isReplacedByOtherTab, localStream])
 
   // Recover WebRTC connection after socket reconnects
   useEffect(() => {
@@ -644,7 +652,7 @@ export function VoiceChatApp() {
       />
 
       {/* Connection status indicator */}
-      {(!isConnected || isReconnecting) && (
+      {!isReplacedByOtherTab && (!isConnected || isReconnecting) && (
         <div className={`fixed top-4 right-4 px-4 py-2 rounded-lg shadow-lg z-50 ${isReconnecting ? 'bg-yellow-600' : 'bg-red-600'
           } text-white`}>
           <div className="flex items-center space-x-2">
@@ -654,6 +662,27 @@ export function VoiceChatApp() {
             <p className="text-sm">
               {isReconnecting ? 'Reconnecting...' : 'Connecting to server...'}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Same identity opened in another tab. The socket will not reconnect
+          on its own here — the other tab now owns it — so this replaces the
+          generic connecting/reconnecting banner with an explanation and a
+          way to reclaim this tab if the user wants to. */}
+      {isReplacedByOtherTab && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/95 backdrop-blur-sm p-4">
+          <div className="max-w-sm w-full bg-gray-800 border border-gray-700 rounded-xl p-6 text-center shadow-2xl">
+            <p className="text-white font-semibold mb-2">Pokytalk is open in another tab</p>
+            <p className="text-sm text-gray-400 mb-5">
+              Only one tab can be active at a time. This tab has been disconnected.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="btn-primary w-full"
+            >
+              Use This Tab Instead
+            </button>
           </div>
         </div>
       )}
