@@ -4,10 +4,15 @@ This guide will help you submit your site to search engines and enable AI search
 
 ## ✅ Files Created
 
-1. **`sitemap.xml`** - Sitemap for search engines
-2. **`robots.txt`** - Crawler instructions
-3. **Enhanced metadata** - SEO-optimized metadata in layout.tsx
-4. **Structured data** - JSON-LD schema for better AI search
+1. **`src/app/sitemap.ts`** - Generates `/sitemap.xml` at build time. Blog URLs are
+   derived from `src/lib/blogArticles.ts`, so adding an article to that array is all
+   that's needed — do not hand-edit the XML (there is no longer a static file).
+2. **`src/app/robots.ts`** - Generates `/robots.txt` at build time.
+3. **`src/lib/seo.ts`** - Per-page titles, descriptions, canonicals and JSON-LD.
+   Every page sets its own canonical here; `layout.tsx` deliberately does not, or
+   it would be inherited by every page and point them all at the homepage.
+4. **Structured data** - `WebApplication` + `Organization` site-wide, `BlogPosting`
+   and `BreadcrumbList` on articles, `FAQPage` on landing pages.
 
 ## 📋 Google Search Console Setup
 
@@ -179,9 +184,17 @@ curl -A "PerplexityBot" https://pokytalk.com/robots.txt
 
 ## 📝 Important Notes
 
-1. **Sitemap Updates**: Update `lastmod` dates in sitemap.xml when you add new content
+1. **Sitemap Updates**: Nothing to do by hand. `lastmod` comes from each article's
+   `date` in `src/lib/blogArticles.ts` and is regenerated on every build.
 2. **robots.txt**: Already configured to allow AI crawlers
-3. **Structured Data**: Automatically included on all pages via layout.tsx
+3. **Structured Data**: Site-wide blocks come from layout.tsx; per-page blocks come
+   from `src/lib/seo.ts`
+4. **New pages**: Every new page must export its own `metadata` (use `pageMetadata()`
+   or `articleMetadata()` from `src/lib/seo.ts`). A page marked `'use client'` cannot
+   export metadata at all and will silently inherit the site defaults — keep pages as
+   server components and push interactivity into child components.
+5. **No fake ratings**: Do not add `aggregateRating` to the structured data unless a
+   real review system exists; inventing review data risks a manual action.
 4. **Domain**: Make sure you're using `pokytalk.com` (not `www.pokytalk.com` or subdomain) consistently
 
 ## 🔗 Useful Links
@@ -194,7 +207,8 @@ curl -A "PerplexityBot" https://pokytalk.com/robots.txt
 
 ## 🎯 Next Steps
 
-1. **Deploy the changes** (sitemap.xml and robots.txt are in public folder)
+1. **Deploy the changes** (sitemap.xml and robots.txt are generated into `frontend/out`
+   by `npm run build` — they are no longer static files in `public/`)
 2. **Submit sitemap to Google Search Console** (follow Step 1 above)
 3. **Submit to Bing Webmaster Tools**
 4. **Wait 24-48 hours** for initial indexing

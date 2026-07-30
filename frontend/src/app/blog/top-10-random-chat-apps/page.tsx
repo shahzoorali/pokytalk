@@ -1,15 +1,27 @@
-'use client'
-
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AdSense } from '@/components/AdSense'
+import { Breadcrumbs } from '@/components/Breadcrumbs'
+import { JsonLd } from '@/components/JsonLd'
+import { articleBreadcrumb, articleMetadata, blogPostingJsonLd, getArticle } from '@/lib/seo'
+
+const SLUG = 'top-10-random-chat-apps'
+
+export const metadata: Metadata = articleMetadata(SLUG)
 
 export default function Top10RandomChatAppsArticle() {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <div className="max-w-4xl mx-auto">
-        <Link href="/blog" className="text-primary-400 hover:text-primary-300 mb-8 inline-block">
-          ← Back to Blog
-        </Link>
+        <JsonLd data={blogPostingJsonLd(SLUG)} />
+        <JsonLd data={articleBreadcrumb(SLUG)} />
+        <Breadcrumbs
+          trail={[
+            { name: 'Home', href: '/' },
+            { name: 'Blog', href: '/blog' },
+            { name: getArticle(SLUG).title },
+          ]}
+        />
         
         <article className="prose prose-invert max-w-none">
           <div className="mb-8 rounded-lg overflow-hidden">

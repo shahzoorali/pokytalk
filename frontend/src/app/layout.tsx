@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { GDPRConsent } from '@/components/GDPRConsent'
+import { JsonLd } from '@/components/JsonLd'
+import { SiteFooter } from '@/components/SiteFooter'
 import Script from 'next/script'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -31,20 +33,37 @@ export const metadata: Metadata = {
     siteName: 'Pokytalk',
     title: 'Pokytalk - Voice Chat with Random People',
     description: 'Connect with random people around the world through voice chat. Talk to strangers online and make new friends.',
+    images: [
+      {
+        url: '/og-default.png',
+        width: 1200,
+        height: 630,
+        alt: 'Pokytalk - free anonymous random voice chat',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Pokytalk - Voice Chat with Random People',
     description: 'Connect with random people around the world through voice chat.',
+    images: ['/og-default.png'],
   },
-  alternates: {
-    canonical: 'https://pokytalk.com',
-  },
+  // NOTE: deliberately no `alternates.canonical` here. Next merges metadata
+  // per-key, so a canonical set on the layout is inherited by every page that
+  // doesn't override it — which previously pointed all 23 pages at the
+  // homepage and told Google to drop them. Each page sets its own canonical
+  // via pageMetadata()/articleMetadata() in lib/seo.ts.
   icons: {
-    icon: '/icon.svg',
-    shortcut: '/icon.svg',
-    apple: '/icon.svg',
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    shortcut: '/favicon.ico',
+    // iOS ignores SVG icons, so this must be a PNG.
+    apple: { url: '/apple-touch-icon.png', sizes: '180x180' },
   },
+  manifest: '/manifest.webmanifest',
   metadataBase: new URL('https://pokytalk.com'),
 }
 
@@ -85,12 +104,27 @@ export default function RootLayout({
                 'Text chat during calls',
                 'Real-time audio communication',
               ],
-              aggregateRating: {
-                '@type': 'AggregateRating',
-                ratingValue: '4.5',
-                ratingCount: '100',
-              },
+              // No aggregateRating: the site has no review system, so any
+              // rating here would be fabricated review data — a structured
+              // data policy violation that risks a site-wide manual action.
             }),
+          }}
+        />
+        {/* Publisher identity, referenced by the BlogPosting markup on articles */}
+        <JsonLd
+          data={{
+            '@context': 'https://schema.org',
+            '@type': 'Organization',
+            name: 'Pokytalk',
+            url: 'https://pokytalk.com',
+            logo: {
+              '@type': 'ImageObject',
+              url: 'https://pokytalk.com/icon-512.png',
+              width: 512,
+              height: 512,
+            },
+            description:
+              'Free anonymous random voice chat. Talk to strangers worldwide with no signup.',
           }}
         />
         {/* Google Consent Mode v2 - Must be loaded before any Google tags */}
@@ -141,6 +175,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <div className="min-h-screen bg-gray-900">
           {children}
+          <SiteFooter />
           <GDPRConsent />
         </div>
       </body>

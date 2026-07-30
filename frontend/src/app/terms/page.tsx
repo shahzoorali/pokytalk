@@ -1,7 +1,14 @@
-'use client'
-
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AdSense } from '@/components/AdSense'
+import { pageMetadata } from '@/lib/seo'
+
+export const metadata: Metadata = pageMetadata({
+  title: 'Terms of Service',
+  description:
+    'The rules for using Pokytalk, our free anonymous voice chat service. Covers acceptable use, age requirements, moderation, reporting, and account-free access.',
+  path: '/terms',
+})
 
 export default function TermsPage() {
   return (

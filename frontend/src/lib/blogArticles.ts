@@ -1,6 +1,10 @@
 export interface BlogArticle {
   slug: string
   title: string
+  /** Shorter variant used for the <title> tag when `title` would be truncated
+   *  in search results. Falls back to `title`. Keep under ~50 chars so the
+   *  " | Pokytalk" suffix still fits inside Google's ~60 char display limit. */
+  seoTitle?: string
   excerpt: string
   date: string
   author: string
@@ -27,6 +31,7 @@ export const articles: BlogArticle[] = [
   {
     slug: 'using-random-chat-platforms-language-exchange',
     title: 'Using Random Chat Platforms for Language Exchange: A Comprehensive Guide',
+    seoTitle: 'Random Chat for Language Exchange',
     excerpt: 'Master language learning through authentic conversations with native speakers. Discover how to effectively use random chat platforms for language exchange, from finding partners to building fluency.',
     date: 'January 3, 2026',
     author: 'Pokytalk Team',
@@ -59,6 +64,7 @@ export const articles: BlogArticle[] = [
   {
     slug: 'stay-safe-random-chat',
     title: 'How to Stay Safe on Random Chat Platforms: Ultimate Safety Guide',
+    seoTitle: 'How to Stay Safe on Random Chat Platforms',
     excerpt: 'Your comprehensive guide to staying safe while enjoying random chat platforms. Learn essential safety practices, recognize red flags, and protect your privacy without sacrificing meaningful connections.',
     date: 'December 24, 2025',
     author: 'Pokytalk Team',
@@ -67,6 +73,7 @@ export const articles: BlogArticle[] = [
   {
     slug: 'voice-chat-vs-text-chat',
     title: 'Voice Chat vs Text Chat: Which is Better for Online Connections?',
+    seoTitle: 'Voice Chat vs Text Chat: Which Is Better?',
     excerpt: 'Explore the differences between voice and text chat platforms. Discover which format works best for different situations and learn how voice chat creates deeper, more authentic connections.',
     date: 'December 24, 2025',
     author: 'Pokytalk Team',
@@ -83,6 +90,7 @@ export const articles: BlogArticle[] = [
   {
     slug: 'psychology-talking-strangers',
     title: 'The Psychology of Talking to Strangers Online: Why We Do It',
+    seoTitle: 'The Psychology of Talking to Strangers',
     excerpt: 'Dive deep into the psychological motivations behind talking to strangers online. Understand why anonymous conversations fulfill our need for connection and how they impact our mental well-being.',
     date: 'December 25, 2025',
     author: 'Pokytalk Team',
@@ -99,6 +107,7 @@ export const articles: BlogArticle[] = [
   {
     slug: 'random-chat-changed-social-connection',
     title: 'How Random Chat Platforms Changed Social Connection Forever',
+    seoTitle: 'How Random Chat Changed Social Connection',
     excerpt: 'Explore how random chat platforms have revolutionized the way we connect with others. Understand their impact on social dynamics, cultural exchange, and the future of human interaction.',
     date: 'December 25, 2025',
     author: 'Pokytalk Team',
@@ -107,6 +116,7 @@ export const articles: BlogArticle[] = [
   {
     slug: 'privacy-guide-online-chat',
     title: 'Privacy Guide for Online Chat Platforms: What You Need to Know',
+    seoTitle: 'Privacy Guide for Online Chat Platforms',
     excerpt: 'Protect your privacy while using online chat platforms. Learn what information to share, what to keep private, and how to maintain anonymity while building genuine connections.',
     date: 'December 25, 2025',
     author: 'Pokytalk Team',
@@ -115,6 +125,7 @@ export const articles: BlogArticle[] = [
   {
     slug: 'conversation-starters-random-chat',
     title: 'Breaking the Ice: 50 Conversation Starters for Random Chats',
+    seoTitle: '50 Conversation Starters for Random Chats',
     excerpt: 'Never struggle with awkward silences again. Discover 50 proven conversation starters that work across cultures and languages, helping you create engaging, meaningful conversations.',
     date: 'December 25, 2025',
     author: 'Pokytalk Team',
@@ -123,6 +134,7 @@ export const articles: BlogArticle[] = [
   {
     slug: 'why-people-use-random-chat',
     title: 'Why People Use Random Chat Platforms: Understanding the Modern Appeal',
+    seoTitle: 'Why People Use Random Chat Platforms',
     excerpt: 'Understand the diverse reasons people turn to random chat platforms. From loneliness to curiosity, explore the motivations driving millions to connect with strangers online.',
     date: 'December 25, 2025',
     author: 'Pokytalk Team',
@@ -131,6 +143,7 @@ export const articles: BlogArticle[] = [
   {
     slug: 'handle-awkward-moments-chat',
     title: 'How to Handle Awkward Moments in Random Chats: A Practical Guide',
+    seoTitle: 'Handling Awkward Moments in Random Chats',
     excerpt: 'Learn how to gracefully navigate awkward situations in random chats. From technical glitches to uncomfortable topics, master the art of keeping conversations flowing smoothly.',
     date: 'December 25, 2025',
     author: 'Pokytalk Team',
@@ -139,6 +152,7 @@ export const articles: BlogArticle[] = [
   {
     slug: 'cultural-exchange-random-chat',
     title: 'Cultural Exchange Through Random Chat Platforms: Connecting Worlds',
+    seoTitle: 'Cultural Exchange Through Random Chat',
     excerpt: 'Discover how random chat platforms facilitate genuine cultural exchange. Learn how these conversations break down stereotypes, build understanding, and create global connections.',
     date: 'December 25, 2025',
     author: 'Pokytalk Team',
@@ -147,6 +161,7 @@ export const articles: BlogArticle[] = [
   {
     slug: 'future-random-chat',
     title: 'The Future of Random Chat: Trends and Predictions for 2025 and Beyond',
+    seoTitle: 'The Future of Random Chat: 2025 and Beyond',
     excerpt: 'Explore emerging trends shaping the future of random chat platforms. From AI integration to virtual reality, discover what\'s next for online social connection.',
     date: 'December 25, 2025',
     author: 'Pokytalk Team',
@@ -163,6 +178,7 @@ export const articles: BlogArticle[] = [
   {
     slug: 'combat-harassment-random-chat',
     title: 'How Random Chat Platforms Combat Harassment: Safety Features Explained',
+    seoTitle: 'How Random Chat Platforms Fight Harassment',
     excerpt: 'Understand how modern random chat platforms protect users from harassment. Learn about AI moderation, reporting systems, and safety features that keep communities safe.',
     date: 'December 25, 2025',
     author: 'Pokytalk Team',

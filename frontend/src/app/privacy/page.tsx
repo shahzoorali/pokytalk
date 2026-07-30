@@ -1,7 +1,14 @@
-'use client'
-
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AdSense } from '@/components/AdSense'
+import { pageMetadata } from '@/lib/seo'
+
+export const metadata: Metadata = pageMetadata({
+  title: 'Privacy Policy',
+  description:
+    'How Pokytalk handles your data. We are an anonymous voice chat service: no account, no call recording, and no conversation storage. Read what we do and do not collect.',
+  path: '/privacy',
+})
 
 export default function PrivacyPage() {
   return (

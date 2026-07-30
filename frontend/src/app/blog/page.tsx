@@ -1,13 +1,27 @@
-'use client'
-
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AdSense } from '@/components/AdSense'
 import { articles } from '@/lib/blogArticles'
+import { JsonLd } from '@/components/JsonLd'
+import { breadcrumbJsonLd, pageMetadata } from '@/lib/seo'
+
+export const metadata: Metadata = pageMetadata({
+  title: 'Blog: Guides to Random Voice Chat',
+  description:
+    'Tips, guides and insights on talking to strangers online: safety, conversation starters, language exchange, etiquette and the culture of random voice chat.',
+  path: '/blog',
+})
 
 export default function BlogPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <div className="max-w-4xl mx-auto">
+        <JsonLd
+          data={breadcrumbJsonLd([
+            { name: 'Home', path: '/' },
+            { name: 'Blog', path: '/blog' },
+          ])}
+        />
         <Link href="/" className="text-primary-400 hover:text-primary-300 mb-8 inline-block">
           ← Back to Home
         </Link>
