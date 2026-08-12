@@ -378,7 +378,22 @@ export function ConnectionScreen({
                 </span>
               )}
             </button>
-            
+
+            {/* History Button */}
+            {callHistory && callHistory.length > 0 && (
+              <button
+                onClick={() => setIsHistorySidebarOpen(true)}
+                className="relative flex items-center space-x-1.5 sm:space-x-2 px-2 sm:px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                title="Call History"
+              >
+                <History className="w-4 h-4 text-primary-400" />
+                <span className="text-white text-xs sm:text-sm hidden sm:inline">History</span>
+                <span className="bg-primary-600 text-white text-xs px-1.5 py-0.5 rounded-full">
+                  {callHistory.length > 9 ? '9+' : callHistory.length}
+                </span>
+              </button>
+            )}
+
             {stats && (
               <div className="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm">
                 <div className="flex items-center space-x-1 sm:space-x-2">
@@ -528,7 +543,7 @@ export function ConnectionScreen({
               </div>
 
               {/* Call Controls Grid */}
-              <div className="grid grid-cols-3 gap-y-6 gap-x-4 max-w-[280px] mx-auto mt-auto mb-10 w-full px-6">
+              <div className="grid grid-cols-4 gap-y-6 gap-x-3 max-w-[320px] mx-auto mt-auto mb-10 w-full px-6">
                 {/* Mute Button */}
                 <div className="flex flex-col items-center group">
                   <button 
@@ -570,6 +585,29 @@ export function ConnectionScreen({
                   </button>
                   <span className="text-xs text-gray-400 mt-2">Safety</span>
                 </div>
+
+                {/* Game Button */}
+                {gameHook && (
+                  <div className="flex flex-col items-center group relative">
+                    <button
+                      onClick={() => setIsGameOpen(true)}
+                      className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
+                        gameHook.isPlaying || gameHook.gameStatus === 'invite_received'
+                          ? 'bg-white text-gray-900'
+                          : 'bg-gray-800 text-white hover:bg-gray-700 active:bg-gray-600'
+                      }`}
+                      title="Play Games"
+                    >
+                      <Gamepad2 className="w-7 h-7" />
+                      {gameHook.gameStatus === 'invite_received' && (
+                        <span className="absolute top-0 right-0 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-xs text-white font-bold border-2 border-black animate-pulse">
+                          !
+                        </span>
+                      )}
+                    </button>
+                    <span className="text-xs text-gray-400 mt-2">Game</span>
+                  </div>
+                )}
               </div>
 
               {/* End Call Button */}
