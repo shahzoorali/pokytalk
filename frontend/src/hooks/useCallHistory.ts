@@ -4,6 +4,27 @@ import { CallHistoryEntry } from '@/types'
 const STORAGE_KEY = 'pokytalk_call_history'
 const MAX_ENTRIES = 10
 
+/**
+ * Number of stored calls, read straight from localStorage.
+ *
+ * The hook below hydrates `history` inside an effect, so anything that reads
+ * the hook's state during the first commit still sees the initial empty array.
+ * Analytics needs the count at mount to tell a returning visitor from a new
+ * one, and a one-render delay there would report every returning visitor as
+ * new — so it reads storage synchronously through this instead.
+ */
+export function getStoredCallCount(): number {
+  if (typeof window === 'undefined') return 0
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (!stored) return 0
+    const parsed = JSON.parse(stored)
+    return Array.isArray(parsed) ? parsed.length : 0
+  } catch {
+    return 0
+  }
+}
+
 export function useCallHistory() {
   const [history, setHistory] = useState<CallHistoryEntry[]>([])
 

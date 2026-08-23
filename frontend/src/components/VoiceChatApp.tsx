@@ -4,9 +4,22 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSocket } from '@/hooks/useSocket'
 import { useWebRTC } from '@/hooks/useWebRTC'
 import { useGame } from '@/hooks/useGame'
-import { useCallHistory } from '@/hooks/useCallHistory'
+import { useCallHistory, getStoredCallCount } from '@/hooks/useCallHistory'
 import { ConnectionScreen } from './ConnectionScreen'
 import { UserFilters } from '@/types'
+import {
+  trackVisitor,
+  trackCallTap,
+  trackMicPermission,
+  trackSearchStart,
+  trackMatchFound,
+  trackSearchAbandon,
+  trackCallConnected,
+  trackCallConnectFailed,
+  trackCallEnded,
+  trackCallbackRequested,
+  trackCallbackAccepted,
+} from '@/lib/analytics'
 
 export function VoiceChatApp() {
   const [isInitialized, setIsInitialized] = useState(false)
@@ -19,6 +32,33 @@ export function VoiceChatApp() {
   const callStartTimeRef = useRef<Date | null>(null)
   const audioInitInFlightRef = useRef(false)
   const [retryNonce, setRetryNonce] = useState(0)
+
+  // --- Analytics timing state ---
+  // Kept in refs, not state: these feed event params only and must never
+  // trigger a re-render mid-call.
+  const searchStartedAtRef = useRef<number | null>(null)
+  const matchedAtRef = useRef<number | null>(null)
+  // Whether WebRTC actually established for the current session. Distinguishes
+  // a real conversation from a match that never got audio flowing.
+  const webrtcConnectedRef = useRef(false)
+  // Guards so match/connect fire once per session rather than on every render
+  // of the effects that observe them.
+  const trackedMatchRef = useRef<string | null>(null)
+  const trackedConnectRef = useRef<string | null>(null)
+  // Mirror of the live online-user count. Read by analytics calls inside
+  // memoised handlers; taking `stats` as a real dependency would rebuild those
+  // handlers on every stats tick and re-fire the effects that depend on them.
+  const onlineUsersRef = useRef<number | undefined>(undefined)
+
+  // Snapshot of stored call count, captured during the first render.
+  //
+  // This cannot be read in an effect. useCallHistory starts at [] and has a
+  // "save history whenever it changes" effect that runs on mount, so by the
+  // time any later effect runs, localStorage has already been overwritten with
+  // the empty initial state (a subsequent render restores it). Render happens
+  // before every effect, so this is the only point where the real pre-visit
+  // value is still observable.
+  const [priorCallsAtLoad] = useState(getStoredCallCount)
 
   // Call history hook
   const callHistory = useCallHistory()
@@ -82,6 +122,19 @@ export function VoiceChatApp() {
     userId: user?.id || null,
   })
 
+  useEffect(() => {
+    onlineUsersRef.current = stats?.onlineUsers
+  }, [stats?.onlineUsers])
+
+  // Report new-vs-returning once per page load, using the render-time snapshot
+  // above (see why an effect-time read is wrong there).
+  const trackedVisitorRef = useRef(false)
+  useEffect(() => {
+    if (trackedVisitorRef.current) return
+    trackedVisitorRef.current = true
+    trackVisitor(priorCallsAtLoad)
+  }, [priorCallsAtLoad])
+
   // Initialize socket connection.
   // Skipped once this tab has been replaced by another tab with the same
   // identity (localStorage clientId is shared per-origin, not per-tab): the
@@ -143,6 +196,15 @@ export function VoiceChatApp() {
         callStartTimeRef.current = new Date()
         console.log('📞 Call started at:', callStartTimeRef.current)
       }
+      // Analytics: matched. Guarded by session id so it fires once per match,
+      // not on every re-render while the call is up.
+      if (trackedMatchRef.current !== sessionId) {
+        trackedMatchRef.current = sessionId
+        matchedAtRef.current = Date.now()
+        webrtcConnectedRef.current = false
+        trackMatchFound(searchStartedAtRef.current, partner.country)
+        searchStartedAtRef.current = null
+      }
     } else if (!isWaiting) {
       callInProgressRef.current = false
       // Don't reset peerSessionRef here - let the cleanup effect handle it
@@ -161,6 +223,15 @@ export function VoiceChatApp() {
       // Calculate duration
       const endTime = new Date()
       const duration = Math.floor((endTime.getTime() - callStartTimeRef.current.getTime()) / 1000) // in seconds
+
+      // Analytics: the partner hung up (this handler only runs for ends the
+      // server told us about; local hang-ups are tracked in handleEndCall).
+      trackCallEnded({
+        durationSeconds: duration,
+        connected: webrtcConnectedRef.current,
+        endedBy: 'partner',
+        partnerCountry: partner.country,
+      })
 
       // Only save if call lasted at least 1 second
       if (duration >= 1) {
@@ -272,6 +343,13 @@ export function VoiceChatApp() {
       // Reset retry count on successful connection or other states
       if (connectionState === 'connected') {
         retryAttemptRef.current = 0
+        // Analytics: P2P audio is actually flowing. Everything before this is
+        // just signalling — this is the first point a conversation can happen.
+        if (sessionId && trackedConnectRef.current !== sessionId) {
+          trackedConnectRef.current = sessionId
+          webrtcConnectedRef.current = true
+          trackCallConnected(matchedAtRef.current)
+        }
       }
       return
     }
@@ -279,6 +357,13 @@ export function VoiceChatApp() {
     if (!partner || !sessionId || !localStream) return
     if (retryAttemptRef.current >= maxRetries) {
       console.log('❌ Max retry attempts reached')
+      // Analytics: matched but never connected after every retry. Both users
+      // are staring at "connecting" — the failure mode most likely to be
+      // read as "this site is broken".
+      if (trackedConnectRef.current !== sessionId) {
+        trackedConnectRef.current = sessionId
+        trackCallConnectFailed(matchedAtRef.current, retryAttemptRef.current)
+      }
       return
     }
 
@@ -351,15 +436,27 @@ export function VoiceChatApp() {
   const handleStartCall = useCallback(async (userFilters?: UserFilters) => {
     if (isUnmountingRef.current) return
 
+    const hasFilters = Boolean(
+      userFilters && (userFilters.countries?.length || userFilters.minAge || userFilters.maxAge)
+    )
+    trackCallTap(onlineUsersRef.current, hasFilters)
+
     try {
       setIsLoading(true)
       console.log('🚀 Starting call...')
       await initializeAudio()
+      trackMicPermission(true)
       setIsInitialized(true)
       setFilters(userFilters || {})
+      // Start the queue clock here rather than on the tap: the mic prompt can
+      // sit open for an arbitrarily long time and would otherwise be counted
+      // as time spent waiting for a match.
+      searchStartedAtRef.current = Date.now()
+      trackSearchStart(onlineUsersRef.current, hasFilters)
       requestCall(userFilters)
     } catch (error) {
       console.error('Failed to start call:', error)
+      trackMicPermission(false, (error as Error)?.name || 'unknown')
       alert('Failed to access microphone. Please check permissions.')
       setIsInitialized(false)
       setIsLoading(false)
@@ -376,6 +473,7 @@ export function VoiceChatApp() {
       setIsLoading(true)
       await initializeAudio()
       setIsInitialized(true)
+      trackCallbackRequested()
       requestCallback(toUserId, originalCallTimestamp, originalCallCountry)
     } catch (error) {
       console.error('Failed to init audio for callback request:', error)
@@ -390,6 +488,7 @@ export function VoiceChatApp() {
       setIsLoading(true)
       await initializeAudio()
       setIsInitialized(true)
+      trackCallbackAccepted()
       acceptCallback(requestId)
     } catch (error) {
       console.error('Failed to init audio for callback accept:', error)
@@ -402,6 +501,23 @@ export function VoiceChatApp() {
     if (isUnmountingRef.current) return
 
     console.log('📞 Ending call...')
+
+    // Analytics: the same handler backs both the in-call hang-up button and the
+    // cancel button on the "Calling..." screen, so which event applies depends
+    // on whether a match had happened yet.
+    if (partner && sessionId && callStartTimeRef.current) {
+      trackCallEnded({
+        durationSeconds: Math.floor((Date.now() - callStartTimeRef.current.getTime()) / 1000),
+        connected: webrtcConnectedRef.current,
+        endedBy: 'self',
+        partnerCountry: partner.country,
+      })
+    } else if (searchStartedAtRef.current !== null) {
+      // Gave up before ever matching — the clearest signal that there was
+      // nobody online to match with.
+      trackSearchAbandon(searchStartedAtRef.current, onlineUsersRef.current)
+      searchStartedAtRef.current = null
+    }
 
     // Save call history if we have partner and session
     if (partner && sessionId && callStartTimeRef.current) {
