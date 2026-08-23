@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { CallHistoryEntry } from '@/types'
 
 const STORAGE_KEY = 'pokytalk_call_history'
@@ -7,11 +7,12 @@ const MAX_ENTRIES = 10
 /**
  * Number of stored calls, read straight from localStorage.
  *
- * The hook below hydrates `history` inside an effect, so anything that reads
- * the hook's state during the first commit still sees the initial empty array.
+ * The hook below hydrates `history` inside an effect, so anything reading the
+ * hook's state during the first commit still sees the empty initial array.
  * Analytics needs the count at mount to tell a returning visitor from a new
- * one, and a one-render delay there would report every returning visitor as
- * new — so it reads storage synchronously through this instead.
+ * one, and a one-render delay would report every returning visitor as new — so
+ * it reads storage synchronously through this instead. Callers should invoke it
+ * during render (see VoiceChatApp), which holds regardless of effect ordering.
  */
 export function getStoredCallCount(): number {
   if (typeof window === 'undefined') return 0
@@ -47,8 +48,21 @@ export function useCallHistory() {
     }
   }, [])
 
-  // Save to localStorage whenever history changes
+  // Save to localStorage whenever history changes.
+  //
+  // The mount run is skipped deliberately. `history` starts as [] and is only
+  // filled by the load effect above via setState, which does not apply until a
+  // later render — so on mount this effect would serialise the empty initial
+  // array over the stored history before the loaded value ever lands. The
+  // subsequent render restores it, but in that window the stored history is
+  // gone: anything reading localStorage then sees nothing, and a reload or
+  // crash inside it loses the user's history for good.
+  const hasSkippedMountSaveRef = useRef(false)
   useEffect(() => {
+    if (!hasSkippedMountSaveRef.current) {
+      hasSkippedMountSaveRef.current = true
+      return
+    }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(history))
     } catch (error) {
