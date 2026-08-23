@@ -18,6 +18,17 @@ import { CallbackRequestModal } from './CallbackRequestModal'
 import { HomepageInfoSection } from './HomepageInfoSection'
 import { BlogWidget } from './BlogWidget'
 
+/**
+ * Live counts are only shown once at least this many people are online.
+ *
+ * A precise "1 online" on a random-chat site reads as "nobody is here, don't
+ * bother" and costs the visit before they ever press Call. Below the threshold
+ * the counter is omitted entirely — the numbers shown are always the real ones,
+ * they are simply not displayed when they would mislead more than inform.
+ * Never replace this with an inflated or synthetic figure.
+ */
+const MIN_ONLINE_TO_SHOW_STATS = 5
+
 interface ConnectionScreenProps {
   onStartCall: (filters?: UserFilters) => void
   stats: ServerStats | null
@@ -394,13 +405,13 @@ export function ConnectionScreen({
               </button>
             )}
 
-            {stats && (
+            {stats && stats.onlineUsers >= MIN_ONLINE_TO_SHOW_STATS && (
               <div className="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm">
-                <div className="flex items-center space-x-1 sm:space-x-2">
+                <div className="flex items-center space-x-1 sm:space-x-2" title="People online now">
                   <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary-400" />
                   <span className="text-gray-300">{stats.onlineUsers}</span>
                 </div>
-                <div className="flex items-center space-x-1 sm:space-x-2">
+                <div className="flex items-center space-x-1 sm:space-x-2" title="Calls in progress">
                   <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary-400" />
                   <span className="text-gray-300">{stats.activeCalls}</span>
                 </div>
@@ -440,7 +451,7 @@ export function ConnectionScreen({
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center w-full relative sm:py-6">
+      <div className="flex-1 flex flex-col items-center w-full relative sm:py-6 min-h-[75vh]">
         <div className="w-full h-full max-w-md flex flex-col justify-between sm:rounded-[3rem] sm:border-[8px] sm:border-gray-800 sm:bg-black overflow-hidden relative shadow-2xl">
           
           {(!isInitialized || (!isInCall && !isWaiting && !loading)) && (
@@ -449,10 +460,16 @@ export function ConnectionScreen({
               {/* Display Area */}
               <div className="flex-1 flex flex-col items-center justify-center pb-8 min-h-[120px]">
                 <div className="w-full text-center px-4">
-                  <h1 className="text-4xl text-white font-light tracking-wide truncate">
-                    Pokytalk
+                  {/* Both lines are one H1 on purpose. The brand keeps its visual
+                      weight, but the heading now also states what the page is —
+                      it previously read "Pokytalk" alone, which told a search
+                      engine nothing about random voice chat. */}
+                  <h1 className="text-white">
+                    <span className="block text-4xl font-light tracking-wide truncate">Pokytalk</span>
+                    <span className="block text-sm text-gray-400 mt-2 font-medium">
+                      Free random voice chat — tap to call a stranger
+                    </span>
                   </h1>
-                  <p className="text-sm text-gray-400 mt-2 font-medium">Tap to call a random stranger</p>
                 </div>
               </div>
 
@@ -703,17 +720,18 @@ export function ConnectionScreen({
           )}
         </div>
 
-        {/* Homepage Info Section and Blog Widget - Hidden for dialer aesthetic, but kept in dom for SEO / accessibility */}
-        {!isInitialized && (
-          <div className="w-full max-w-md mx-auto hidden sm:block mt-8">
-            <HomepageInfoSection />
-            <BlogWidget />
-          </div>
-        )}
-
         {/* Hidden audio element for remote stream */}
         {isInCall && <audio ref={remoteAudioRef} autoPlay playsInline />}
       </div>
+
+      {/* Homepage copy and blog links. Sits below the dialer on every breakpoint
+          rather than being display:none on mobile — see note above. */}
+      {!isInitialized && (
+        <div className="w-full max-w-md mx-auto px-4 pb-10 mt-8">
+          <HomepageInfoSection />
+          <BlogWidget />
+        </div>
+      )}
 
       {/* Filters Modal */}
       {isFiltersModalOpen && (
