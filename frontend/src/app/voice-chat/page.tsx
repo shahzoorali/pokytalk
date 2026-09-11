@@ -48,7 +48,40 @@ export default function VoiceChatPage() {
             'Headphones are worth using. They prevent your speakers feeding back into your microphone, which is the usual cause of echo that the other person hears but you do not.',
           ],
         },
+        {
+          heading: 'Voice, video, and text compared',
+          paragraphs: [
+            'Each format for talking to strangers trades something away. Text is the most private and the easiest to walk away from, but it is slow and strips out tone, so jokes and sarcasm land wrong. Video is the most personal, but it puts appearance first, needs a good connection, and is the hardest to keep free of explicit content. Voice keeps the tone, hesitation, and laughter that text loses while removing the camera pressure and bandwidth cost that video adds.',
+            'None of them is best for everything. Voice is the strongest default when you want a real conversation, are on a phone or a slow connection, or simply do not want to be on camera.',
+          ],
+        },
+        {
+          heading: 'Random voice chat on your phone',
+          paragraphs: [
+            'Pokytalk works in a mobile browser with nothing to install. Because audio uses a small fraction of the bandwidth video needs, calls hold up on mobile data and on weak Wi-Fi where a video roulette site would freeze.',
+            'A few things help on a phone: use earphones so your microphone does not pick up the speaker and echo, keep the browser tab in the foreground during a call so the connection is not suspended, and allow microphone access when prompted rather than dismissing it. If you dismissed it, the site settings for the page have a microphone toggle you can switch back on.',
+          ],
+        },
       ]}
+      comparison={{
+        heading: 'Random voice chat vs video and text',
+        intro:
+          'What you gain and give up with each format for talking to strangers online.',
+        columns: ['Voice (Pokytalk)', 'Video roulette', 'Text chat'],
+        rows: [
+          { label: 'Conveys tone and emotion', values: [true, true, false] },
+          { label: 'Works on a slow connection', values: [true, false, true] },
+          { label: 'Low mobile-data use', values: [true, false, true] },
+          { label: 'No appearance pressure', values: [true, false, true] },
+          {
+            label: 'Explicit-content exposure',
+            values: ['None', 'High', 'Low'],
+          },
+          { label: 'Conversation speed', values: ['Fast', 'Fast', 'Slow'] },
+          { label: 'Can use while doing something else', values: [true, false, false] },
+          { label: 'No signup', values: [true, 'Usually', 'Varies'] },
+        ],
+      }}
       faqs={[
         {
           question: 'Do I need to download an app for voice chat?',
@@ -79,6 +112,21 @@ export default function VoiceChatPage() {
           question: 'How long can a voice chat last?',
           answer:
             'There is no time limit. Calls last as long as both people stay on the line, and a timer shows the current call duration.',
+        },
+        {
+          question: 'Does random voice chat work on mobile?',
+          answer:
+            'Yes. Pokytalk runs in a mobile browser with nothing to install, and because voice uses far less bandwidth than video, calls stay stable on mobile data and weak Wi-Fi.',
+        },
+        {
+          question: 'Can I filter who I am matched with?',
+          answer:
+            'Yes. You can set an age range and select one or more countries before connecting. If nobody matches, Pokytalk widens the search instead of leaving you in the queue.',
+        },
+        {
+          question: 'What do I need to start a voice chat?',
+          answer:
+            'A browser and a microphone. No account, no app, no camera. Grant microphone permission when prompted and you are matched within seconds.',
         },
       ]}
     />

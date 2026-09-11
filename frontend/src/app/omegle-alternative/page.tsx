@@ -41,7 +41,57 @@ export default function OmegleAlternativePage() {
             'Pokytalk is for adults. You must be 18 or older to use it.',
           ],
         },
+        {
+          heading: 'Choosing an Omegle alternative that fits what you want',
+          paragraphs: [
+            'The sites that appear when you search for an Omegle replacement are not interchangeable. They differ on the thing that matters most — whether the default is video or voice — and on smaller details like whether you can filter by country, whether an account is needed, and whether the service is even still online.',
+            'If your goal is a face-to-face webcam experience, a video roulette site is the honest recommendation and Pokytalk is not it. If your goal is conversation with a real person and the camera was always the part you tolerated rather than wanted, a voice-first service removes the friction and most of the moderation problem in one step.',
+          ],
+          list: [
+            'Want webcam video: Chatroulette, OmeTV, or Emerald Chat.',
+            'Want text only: Emerald Chat or a chat-focused subreddit.',
+            'Want voice conversation with country and age filters and no signup: Pokytalk.',
+            'Want to reconnect with people you enjoyed talking to: Pokytalk is currently the only one of these with a call-back feature.',
+          ],
+        },
+        {
+          heading: 'Moving over from Omegle',
+          paragraphs: [
+            'There is nothing to migrate. Omegle stored no profile, no friends list, and no history, so there is no export step and no account to close. Open Pokytalk, allow microphone access, and press call.',
+            'The habits transfer directly. Open with a question rather than "hi", give each match a minute before deciding, and hang up without guilt when a conversation is not going anywhere. The one new habit worth building is using call-back: when a conversation is good, add the person from your call history so you can request them again instead of hoping to be re-matched by chance.',
+          ],
+        },
       ]}
+      comparison={{
+        heading: 'Pokytalk vs Omegle and other alternatives',
+        intro:
+          'How Pokytalk compares to Omegle and the video-roulette sites people most often move to. Details for other services are based on their publicly documented features and change over time.',
+        columns: ['Pokytalk', 'Omegle', 'Chatroulette', 'Emerald Chat'],
+        rows: [
+          {
+            label: 'Primary format',
+            values: ['Voice', 'Video + text', 'Video', 'Video + text'],
+          },
+          {
+            label: 'Still operating',
+            values: [true, 'No, closed 2023', true, true],
+          },
+          { label: 'Account required', values: [false, false, false, 'Optional'] },
+          {
+            label: 'Explicit-content exposure',
+            values: ['None (no video)', 'High', 'Moderate', 'Moderate'],
+          },
+          { label: 'Country filter', values: [true, false, false, 'Limited'] },
+          { label: 'Age-range filter', values: [true, false, false, false] },
+          { label: 'Call a good match back', values: [true, false, false, false] },
+          {
+            label: 'Cost',
+            values: ['Free', 'Was free', 'Free + paid tier', 'Free + paid tier'],
+          },
+          { label: 'Works in browser, no install', values: [true, true, true, true] },
+        ],
+        note: 'Comparison compiled September 2026. Third-party features may have changed since.',
+      }}
       faqs={[
         {
           question: 'Is Pokytalk free?',
@@ -67,6 +117,21 @@ export default function OmegleAlternativePage() {
           question: 'Are calls recorded?',
           answer:
             'No. Audio is sent peer to peer and is not recorded or stored. Text messages sent during a call are not kept after the call ends.',
+        },
+        {
+          question: 'Why did Omegle shut down?',
+          answer:
+            'Omegle closed in November 2023 after its founder cited the unsustainable cost of fighting misuse of the platform, alongside mounting legal pressure. The site had run since 2009.',
+        },
+        {
+          question: 'Is Pokytalk a good Omegle alternative for video chat?',
+          answer:
+            'No. Pokytalk is voice only and has no webcam feature at all. If you specifically want video chat with strangers, a video-roulette site will suit you better. Pokytalk is the better choice if the conversation mattered more than the camera.',
+        },
+        {
+          question: 'What makes Pokytalk different from other Omegle alternatives?',
+          answer:
+            'Two things: it is voice only, which removes the explicit-content problem that made Omegle hard to run; and it lets you call a good match back later from your call history, which none of the mainstream video alternatives offer.',
         },
       ]}
     />
