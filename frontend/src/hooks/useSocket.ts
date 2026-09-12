@@ -49,39 +49,6 @@ const getBackendUrl = (): string => {
 
 const BACKEND_URL = getBackendUrl()
 
-// Detect country using IP geolocation API
-async function detectCountry(): Promise<string | undefined> {
-  try {
-    // Use free IP geolocation API (ipapi.co)
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 3000)
-
-    const response = await fetch('https://ipapi.co/json/', {
-      signal: controller.signal
-    })
-    clearTimeout(timeoutId)
-
-    const data = await response.json()
-    if (data?.country_code) {
-      console.log(`🌍 Detected country from IP: ${data.country_code}`)
-      return data.country_code
-    }
-  } catch (e) {
-    console.log('Could not detect country from IP geolocation:', e)
-  }
-
-  // Fallback: Try to get from timezone (less accurate but works offline)
-  try {
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    // Some timezones contain country info, but this is unreliable
-    // Just return undefined if IP detection fails
-  } catch (e) {
-    // ignore
-  }
-
-  return undefined
-}
-
 // Stable per-browser anonymous identity. Lets a returning/refreshing visitor
 // keep the same server-side user id so "Call Back" and online status work.
 const CLIENT_ID_KEY = 'pokytalk_client_id'
@@ -223,10 +190,9 @@ export function useSocket() {
       } else {
         // First connection (or returning visitor): register/reclaim our
         // persistent identity so call history + online status stay coherent.
-        const country = await detectCountry()
+        // Country is detected server-side from the request IP.
         const clientId = getClientId()
-        console.log('Emitting user:connect event', country ? `with country: ${country}` : 'without country')
-        newSocket.emit('user:connect', { ...(country ? { country } : {}), ...(clientId ? { clientId } : {}) })
+        newSocket.emit('user:connect', { ...(clientId ? { clientId } : {}) })
       }
     })
 
@@ -360,9 +326,8 @@ export function useSocket() {
       userIdRef.current = null
       setIsWaiting(false)
       setIsReconnecting(false)
-      const country = await detectCountry()
       const clientId = getClientId()
-      newSocket.emit('user:connect', { ...(country ? { country } : {}), ...(clientId ? { clientId } : {}) })
+      newSocket.emit('user:connect', { ...(clientId ? { clientId } : {}) })
     })
 
     // Partner temporarily dropped (grace period) — informational.

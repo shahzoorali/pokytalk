@@ -73,13 +73,17 @@ export class SocketManager {
           // Auto-detect country from IP if not provided
           let detectedCountry = data.country;
           if (!detectedCountry) {
-            // Get IP from multiple sources, handling arrays and undefined
+            // Get IP from multiple sources, handling arrays and undefined.
+            // x-forwarded-for is checked first: behind App Runner's load balancer,
+            // socket.handshake.address is the proxy's internal VPC IP, not the real client IP.
             let clientIP: string | undefined;
-            if (socket.handshake.address) {
-              clientIP = socket.handshake.address;
-            } else if (socket.request.headers['x-forwarded-for']) {
+            if (socket.request.headers['x-forwarded-for']) {
               const forwardedFor = socket.request.headers['x-forwarded-for'];
-              clientIP = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+              const forwardedForStr = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+              // x-forwarded-for can be a comma-separated list; the first entry is the original client
+              clientIP = forwardedForStr.split(',')[0].trim();
+            } else if (socket.handshake.address) {
+              clientIP = socket.handshake.address;
             } else if (socket.request.socket.remoteAddress) {
               clientIP = socket.request.socket.remoteAddress;
             }
